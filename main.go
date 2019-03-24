@@ -5,6 +5,7 @@ import (
     "log"
     "net/http"
     "encoding/json"
+    "os"
 )
 
 type Article struct {
@@ -32,7 +33,13 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 func handleRequests() {
     http.HandleFunc("/", homePage)
     http.HandleFunc("/articles", allArticles)
-    log.Fatal(http.ListenAndServe(":8081", nil))
+
+    port := os.Getenv("PORT")
+
+    if port == ""{
+        port = "8000"
+    }
+    log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func main() {

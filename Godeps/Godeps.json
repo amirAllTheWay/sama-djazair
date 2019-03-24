@@ -1,0 +1,6 @@
+{
+	"ImportPath": "test-deploy-amir",
+	"GoVersion": "go1.8",
+	"GodepVersion": "v80",
+	"Deps": []
+}
