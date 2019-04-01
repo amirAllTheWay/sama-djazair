@@ -1,1 +1,1 @@
-web: test-deploy-amir
+web: sama-djazair

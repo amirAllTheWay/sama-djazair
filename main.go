@@ -8,22 +8,25 @@ import (
     "os"
 )
 
-type Article struct {
-    Title string `json:"Title"`
-    Desc string `json:"desc"`
-    Content string `json:"content"`
+
+type TourismOffer struct {
+    FlyingCompany string `json:FlyingCompany`
+    DepartureCity string `json:departureCity`
+    DestinationCity string `json:destinationCity`
+    Hotel string `json:hotel`
+    Price string `json:price`
 }
 
-type Articles []Article
+type TourismOffers []TourismOffer
 
-func allArticles(w http.ResponseWriter, r *http.Request) {
-    articles := Articles{
-        Article{Title:"Test title", Desc: "Test desc", Content: "Test content"},
+func allTourismOffers(w http.ResponseWriter, r *http.Request) {
+    offers := TourismOffers{
+        TourismOffer{FlyingCompany:"Air Algérie", DepartureCity: "Alger", DestinationCity: "Rome", Hotel:"Sheraton", Price:"350€"},
     }
 
 
-    fmt.Println("Endpoint hit: All Articles endpoint")
-    json.NewEncoder(w).Encode(articles)
+    fmt.Println("Endpoint hit: All tourism offers endpoint")
+    json.NewEncoder(w).Encode(offers)
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +35,7 @@ func homePage(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
     http.HandleFunc("/", homePage)
-    http.HandleFunc("/articles", allArticles)
+    http.HandleFunc("/tourismOffers", allTourismOffers)
 
     port := os.Getenv("PORT")
 
@@ -43,7 +46,7 @@ func handleRequests() {
 }
 
 func main() {
-    
-    handleRequests()
     fmt.Printf("hello, world\n")
+    handleRequests()
+    
 }
