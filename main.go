@@ -36,7 +36,7 @@ const (
     dbPort     = 5432
     user     = "postgres"
     password = "password"
-    dbname   = "amir_database"
+    dbname   = "sama_database"
 )
 
 func allTourismOffers(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +52,7 @@ func allTourismOffers(w http.ResponseWriter, r *http.Request) {
 func (users *Users)  addOffer(w http.ResponseWriter, req *http.Request) {
     fmt.Println("Endpoint hit: addOffer")
 
-    
+    /*
     dbConnect := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS '%s';",dbname)
     fmt.Println("addOffer connect: ", dbConnect)
 
@@ -63,7 +63,7 @@ func (users *Users)  addOffer(w http.ResponseWriter, req *http.Request) {
         json.NewEncoder(w).Encode(httpResponse)
         return
     }
-
+    */
     createTableCmd := fmt.Sprintf("CREATE TABLE IF NOT EXISTS TOURISM_OFFERS (flyingCompany CHAR(10), departureCity CHAR(10), destinationCity CHAR(10), hotel CHAR(10), price CHAR(10), hotelImage CHAR(10));")
     fmt.Println("addOffer connect: ", createTableCmd)
 
