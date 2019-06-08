@@ -8,27 +8,40 @@ import (
     "os"
     "database/sql"
     _ "github.com/lib/pq"
+    sdu "sama-djazair/utils"
+    "github.com/gorilla/mux"
 )
 
-
+// TourismOffer represent a unit offer for tourism
 type TourismOffer struct {
-    FlyingCompany string `json:flyingCompany`
-    DepartureCity string `json:departureCity`
-    DestinationCity string `json:destinationCity`
-    Hotel string `json:hotel`
-    Price string `json:price`
-    HotelImage string `json:hotelImage`
+    FlyingCompany string `json:"flyingCompany"`
+    DepartureCity string `json:"departureCity"`
+    DestinationCity string `json:"destinationCity"`
+    Hotel string `json:"hotel"`
+    Price string `json:"price"`
+    HotelImage string `json:"hotelImage"`
+    TravelAgency string `json:"travelAgency"`
+    TravelDuration int `json:"travelDuration"`
 }
 
+// Users represent connection to sql DB
 type Users struct {
     db *sql.DB
 }
 
+// TourismOffers is list of tourism offers
 type TourismOffers []TourismOffer
 
-type HttpResponse struct {
-    ResponseCode int `json:responseCode`
-    ResponseMessage string `json:responseMessage`
+// HTTPResponse represents generic http response
+type HTTPResponse struct {
+    ResponseCode int `json:"responseCode"`
+    ResponseMessage string `json:"responseMessage"`
+}
+
+// TourismOffersHTTPResponse represents data for tourism offers
+type TourismOffersHTTPResponse struct {
+    ResponseDetails HTTPResponse `json:"httpResponse"`
+    Data TourismOffers `json:"tourismOffers"`
 }
 
 const (
@@ -59,8 +72,8 @@ func (users *Users)  addOffer(w http.ResponseWriter, req *http.Request) {
     if _, err := users.db.Exec(dbConnect); err != nil {
         errMessage := fmt.Sprintf("Error creating database: %q", err)
         fmt.Println(errMessage)
-        httpResponse := HttpResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: errMessage}
-        json.NewEncoder(w).Encode(httpResponse)
+        hTTPResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: errMessage}
+        json.NewEncoder(w).Encode(hTTPResponse)
         return
     }
     */
@@ -70,7 +83,7 @@ func (users *Users)  addOffer(w http.ResponseWriter, req *http.Request) {
     if _, err := users.db.Exec(createTableCmd); err != nil {
             errMessage := fmt.Sprintf("Error creating database table: %q", err)
             fmt.Println(errMessage)
-            httpResponse := HttpResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: errMessage}
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: errMessage}
             json.NewEncoder(w).Encode(httpResponse)
         return
     }
@@ -90,15 +103,123 @@ func (users *Users)  addOffer(w http.ResponseWriter, req *http.Request) {
     if _, err := users.db.Query(insertOfferCmd); err != nil {
             fmt.Printf("Error inserting offer: %q", err)
             //http.Error(w, err.Error(), http.StatusInternalServerError)
-            httpResponse := HttpResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
             json.NewEncoder(w).Encode(httpResponse)
             return
     }
 
-    httpResponse := HttpResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+    httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
 
     fmt.Println("Inserted offer: ", tourismOffer.Hotel)
     json.NewEncoder(w).Encode(httpResponse)
+    return
+}
+
+func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Request) {
+    
+    companyName := sdu.URLParamAsString("companyName", req)
+    fmt.Println("getOfferByCompanyName : ", companyName)
+
+    getOfferByCompanyReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE flyingcompany LIKE '%s';", companyName)
+
+    fmt.Println("select command: ", getOfferByCompanyReq)
+    rows, err := users.db.Query(getOfferByCompanyReq)
+    if err != nil {
+            fmt.Printf("Error getting offer: %q", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+    }
+
+    defer rows.Close()
+    var results TourismOffers
+    for rows.Next() {
+        var tourismOffer TourismOffer
+        if err := rows.Scan(&tourismOffer.FlyingCompany, &tourismOffer.DepartureCity, &tourismOffer.DestinationCity, &tourismOffer.Hotel, &tourismOffer.Price, &tourismOffer.HotelImage, &tourismOffer.TravelAgency, &tourismOffer.TravelDuration); err != nil {
+            fmt.Println("error getOfferByCompanyName error: ", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+        }
+        results = append(results, tourismOffer)
+    }
+
+    
+    hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+    fmt.Println("getOfferByCompanyName found offers: ", hdr)
+    json.NewEncoder(w).Encode(hdr)
+    return
+}
+
+func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request) {
+    fmt.Println("get All TourismOffers")
+
+    getOfferByCompanyReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS;")
+
+    fmt.Println("select command: ", getOfferByCompanyReq)
+    rows, err := users.db.Query(getOfferByCompanyReq)
+    if err != nil {
+            fmt.Printf("Error getting all tourism offers: %q", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+    }
+
+    defer rows.Close()
+    var results TourismOffers
+    for rows.Next() {
+        var tourismOffer TourismOffer
+        if err := rows.Scan(&tourismOffer.FlyingCompany, &tourismOffer.DepartureCity, &tourismOffer.DestinationCity, &tourismOffer.Hotel, &tourismOffer.Price, &tourismOffer.HotelImage, &tourismOffer.TravelAgency, &tourismOffer.TravelDuration); err != nil {
+            fmt.Println("error getAllTourismOffers error: ", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+        }
+        results = append(results, tourismOffer)
+    }
+
+    
+    hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+    //fmt.Println("getAllTourismOffers found offers: ", hdr)
+    json.NewEncoder(w).Encode(hdr)
+    return
+}
+
+func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
+    fmt.Println("get All getOfferByCity")
+
+    departureCity := sdu.URLParamAsString("departureCity", req)
+    destinationCity := sdu.URLParamAsString("destinationCity", req)
+    fmt.Println("getOfferByCity: ", departureCity)
+
+    getOfferByCityReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE departureCity LIKE '%s' AND destinationCity LIKE '%s';", departureCity, destinationCity)
+
+    fmt.Println("select command: ", getOfferByCityReq)
+    rows, err := users.db.Query(getOfferByCityReq)
+    if err != nil {
+            fmt.Printf("Error getting offer: %q", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+    }
+
+    defer rows.Close()
+    var results TourismOffers
+    for rows.Next() {
+        var tourismOffer TourismOffer
+        if err := rows.Scan(&tourismOffer.FlyingCompany, &tourismOffer.DepartureCity, &tourismOffer.DestinationCity, &tourismOffer.Hotel, &tourismOffer.Price, &tourismOffer.HotelImage, &tourismOffer.TravelAgency, &tourismOffer.TravelDuration); err != nil {
+            fmt.Println("error getOfferByCity error: ", err)
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            json.NewEncoder(w).Encode(httpResponse)
+            return
+        }
+        results = append(results, tourismOffer)
+    }
+
+    hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+    json.NewEncoder(w).Encode(hdr)
+
+    return
 }
 
 func homePage(w http.ResponseWriter, r *http.Request) {
@@ -112,7 +233,7 @@ func handleRequests() {
     if port == ""{
         port = "8000"
     }
-/*
+///*
     psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s sslmode=disable",host, dbPort, user, password)
 
     db, err := sql.Open("postgres", psqlInfo)
@@ -127,20 +248,27 @@ func handleRequests() {
         panic(err)
     }
 
-    fmt.Println("Successfully connected!")
-    */
+    fmt.Println("Successfully !")
+    //*/
+
+    /*
     db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
     if err != nil {
         log.Fatalf("Error opening database: %q", err)
-    }
+    }*/
 
     users := &Users{db: db}
 
-    http.HandleFunc("/", homePage)
-    http.HandleFunc("/tourismOffers", allTourismOffers)
-    http.HandleFunc("/addOffer", users.addOffer)
+    r := mux.NewRouter()
+    r.HandleFunc("/tourismOffers", allTourismOffers)
+    r.HandleFunc("/addOffer", users.addOffer)
+    r.HandleFunc("/getOffers/getOfferByName/{companyName}", users.getOfferByCompanyName).Methods("GET")
+    r.HandleFunc("/getOffers/getOfferByCity/{departureCity}/{destinationCity}", users.getOfferByCity).Methods("GET")
+    r.HandleFunc("/getOffers/allTourismOffers", users.getAllTourismOffers).Methods("GET")
+    
+    //log.Fatal(http.ListenAndServeTLS(":8000", "./certifs/public.cert", "./certifs/private.key", r))
+    log.Fatal(http.ListenAndServe(":8000", r))
 
-    log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 
 func main() {
