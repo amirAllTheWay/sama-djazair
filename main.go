@@ -349,7 +349,7 @@ func handleRequests() {
 	r.HandleFunc("/getHotTourismOffers", users.getHotTourismOffers).Methods("GET")
 
 	//log.Fatal(http.ListenAndServeTLS(":8000", "./certifs/public.cert", "./certifs/private.key", r))
-	log.Fatal(http.ListenAndServe(":8000", r))
+	log.Fatal(http.ListenAndServe(":"+port, r))
 
 }
 
