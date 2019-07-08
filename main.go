@@ -334,9 +334,9 @@ func handleRequests() {
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Error opening database: %q", err)
+	} else {
+		fmt.Println("Successfully connected to DB!")
 	}
-
-	fmt.Println("Successfully !")
 
 	users := &Users{db: db}
 
