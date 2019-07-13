@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"log"
@@ -313,7 +314,7 @@ func handleRequests() {
 	if port == "" {
 		port = "8000"
 	}
-	/*
+	
 		psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s sslmode=disable", host, dbPort, user, password)
 
 		db, err := sql.Open("postgres", psqlInfo)
@@ -329,14 +330,14 @@ func handleRequests() {
 		}
 
 		fmt.Println("Successfully !")
-	*/
-
+	
+		/*
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Error opening database: %q", err)
 	} else {
 		fmt.Println("Successfully connected to DB!")
-	}
+	}*/
 
 	users := &Users{db: db}
 
@@ -349,7 +350,7 @@ func handleRequests() {
 	r.HandleFunc("/getHotTourismOffers", users.getHotTourismOffers).Methods("GET")
 
 	//log.Fatal(http.ListenAndServeTLS(":8000", "./certifs/public.cert", "./certifs/private.key", r))
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	log.Fatal(http.ListenAndServe(":"+port, handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(r)))
 
 }
 
