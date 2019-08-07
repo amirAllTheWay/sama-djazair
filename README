@@ -1,0 +1,5 @@
+## HOW TO MANAGE DEPENDENCY
+
+1- export GOPATH="/Users/amir/go"
+2- source ~/.bash_profile
+3- godep save ./...
