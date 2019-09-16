@@ -71,6 +71,39 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+
+func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Endpoint hit: addOmraOffer")
+
+	decoder := json.NewDecoder(req.Body)
+	var omraOffer sdu.OmraOffer
+	err := decoder.Decode(&omraOffer)
+	if err != nil {
+		panic(err)
+	}
+
+	insertOfferCmd := fmt.Sprintf("INSERT INTO OMRA_OFFERS "+
+		"(offertitle, flyingcompany, departurecity, destinationcity, distancefromharam, departuredate, returndate, hotel, price, offerdescription, hotelimage, travelagency, Agencyemail, travelduration, hotelstars, ishotoffer, agencyaddress, agencyphone) VALUES "+
+		"('%s', '%s','%s','%s','%s','%s','%s','%s', %s ,'%s','%s','%s','%s','%d','%d','%t','%s','%s');",
+		omraOffer.OfferTitle, omraOffer.FlyingCompany, omraOffer.DepartureCity, omraOffer.DestinationCity, omraOffer.DistanceFromHaram,
+		omraOffer.DepartureDate, omraOffer.ReturnDate, omraOffer.Hotel, omraOffer.Price, omraOffer.OfferDescription, omraOffer.HotelImage,
+		omraOffer.TravelAgency, omraOffer.AgencyEmail, omraOffer.TravelDuration, omraOffer.HotelStars, omraOffer.IsHotOffer, omraOffer.AgencyAddress, omraOffer.AgencyPhone)
+
+	if _, err := users.db.Query(insertOfferCmd); err != nil {
+		fmt.Println("Error inserting offer: %q", err)
+		//http.Error(w, err.Error(), http.StatusInternalServerError)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+
+	fmt.Println("Inserted omra offer: ", omraOffer.Hotel)
+	json.NewEncoder(w).Encode(httpResponse)
+	return
+}
+
 func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Request) {
 
 	companyName := sdu.URLParamAsString("companyName", req)
@@ -490,7 +523,7 @@ func handleRequests() {
 	if port == "" {
 		port = "8000"
 	}
-	
+	/*
 		psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s sslmode=disable", host, dbPort, user, password)
 
 		db, err := sql.Open("postgres", psqlInfo)
@@ -506,20 +539,21 @@ func handleRequests() {
 		}
 
 		fmt.Println("Successfully !")
-	
-		/*
+	*/
+
 	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatalf("Error opening database: %q", err)
 	} else {
-		fmt.Println("Successfully connected to DB!")
-	}*/
+		fmt.Println("Successfully connected to DB! port: %q", port)
+	}
 
 	users := &Users{db: db}
 
 	r := mux.NewRouter()
 	r.HandleFunc("/tourismOffers", allTourismOffers)
 	r.HandleFunc("/addTourismOffer", users.addTourismOffer)
+	r.HandleFunc("/addOmraOffer", users.addOmraOffer)
 	r.HandleFunc("/getOffers/getOfferByName/{companyName}", users.getOfferByCompanyName).Methods("GET")
 	r.HandleFunc("/getOffers/getOfferByCity/{departureCity}/{destinationCity}", users.getOfferByCity).Methods("GET")
 	r.HandleFunc("/getOffers/allTourismOffers", users.getAllTourismOffers).Methods("GET")
