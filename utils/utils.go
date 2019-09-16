@@ -35,6 +35,28 @@ type TourismOffer struct {
 	AgencyPhone     string `json:"agencyPhone"`
 }
 
+// OmraOffer represent a unit offer for tourism
+type OmraOffer struct {
+	OfferTitle		string `json:"offerTitle"`
+	FlyingCompany   string `json:"flyingCompany"`
+	DepartureCity   string `json:"departureCity"`
+	DestinationCity string `json:"destinationCity"`
+	DistanceFromHaram string `json:"distanceFromHaram"`
+	DepartureDate   string `json:"departureDate"`
+	ReturnDate string `json:"returnDate"`
+	Hotel           string `json:"hotelName"`
+	Price           string `json:"offerPrice"`
+	OfferDescription           string `json:"offerDescription"`
+	HotelImage      string `json:"hotelImage"`
+	TravelAgency    string `json:"travelAgency"`
+	AgencyEmail    string `json:"AgencyEmail"`
+	TravelDuration  int    `json:"travelDuration"`
+	HotelStars      int    `json:"hotelStars"`
+	IsHotOffer      bool   `json:"isHotOffer"`
+	AgencyAddress   string `json:"agencyAddress"`
+	AgencyPhone     string `json:"agencyPhone"`
+}
+
 // TourismOffers is list of tourism offers
 type TourismOffers []TourismOffer
 

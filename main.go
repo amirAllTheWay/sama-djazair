@@ -102,7 +102,12 @@ func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Reque
 			&tourismOffer.HotelStars,
 			&tourismOffer.IsHotOffer,
 			&tourismOffer.AgencyAddress,
-			&tourismOffer.AgencyPhone); err != nil {
+			&tourismOffer.AgencyPhone,
+			&tourismOffer.OfferTitle,
+			&tourismOffer.DepartureDate,
+			&tourismOffer.ReturnDate,
+			&tourismOffer.OfferDescription,
+			&tourismOffer.AgencyEmail); err != nil {
 			fmt.Println("error getOfferByCompanyName error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -135,7 +140,8 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 	var results sdu.TourismOffers
 	for rows.Next() {
 		var tourismOffer sdu.TourismOffer
-		if err := rows.Scan(&tourismOffer.FlyingCompany,
+		if err := rows.Scan(
+			&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
 			&tourismOffer.DestinationCity,
 			&tourismOffer.Hotel,
@@ -146,7 +152,12 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.HotelStars,
 			&tourismOffer.IsHotOffer,
 			&tourismOffer.AgencyAddress,
-			&tourismOffer.AgencyPhone); err != nil {
+			&tourismOffer.AgencyPhone,
+			&tourismOffer.OfferTitle,
+			&tourismOffer.DepartureDate,
+			&tourismOffer.ReturnDate,
+			&tourismOffer.OfferDescription,
+			&tourismOffer.AgencyEmail); err != nil {
 			fmt.Println("error getAllTourismOffers error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -194,7 +205,12 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 			&tourismOffer.HotelStars,
 			&tourismOffer.IsHotOffer,
 			&tourismOffer.AgencyAddress,
-			&tourismOffer.AgencyPhone); err != nil {
+			&tourismOffer.AgencyPhone,
+			&tourismOffer.OfferTitle,
+			&tourismOffer.DepartureDate,
+			&tourismOffer.ReturnDate,
+			&tourismOffer.OfferDescription,
+			&tourismOffer.AgencyEmail); err != nil {
 			fmt.Println("error getOfferByCity error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
