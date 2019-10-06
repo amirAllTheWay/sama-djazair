@@ -49,6 +49,7 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}
 
+	//TODO handle offer reference column
 	insertOfferCmd := fmt.Sprintf("INSERT INTO TOURISM_OFFERS "+
 		"(offertitle, flyingcompany, departurecity, destinationcity, departuredate, returndate, hotel, price, offerdescription, hotelimage, travelagency, Agencyemail, travelduration, hotelstars, ishotoffer, agencyaddress, agencyphone) VALUES "+
 		"('%s', '%s','%s','%s','%s','%s','%s','%s' ,'%s','%s','%s','%s','%d','%d','%t','%s','%s');",
@@ -71,7 +72,6 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
-
 func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addOmraOffer")
 
@@ -82,6 +82,7 @@ func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
 		panic(err)
 	}
 
+	//TODO handle offer reference column
 	insertOfferCmd := fmt.Sprintf("INSERT INTO OMRA_OFFERS "+
 		"(offertitle, flyingcompany, departurecity, destinationcity, distancefromharam, departuredate, returndate, hotel, price, offerdescription, hotelimage, travelagency, Agencyemail, travelduration, hotelstars, ishotoffer, agencyaddress, agencyphone) VALUES "+
 		"('%s', '%s','%s','%s','%s','%s','%s','%s', %s ,'%s','%s','%s','%s','%d','%d','%t','%s','%s');",
@@ -140,7 +141,8 @@ func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Reque
 			&tourismOffer.DepartureDate,
 			&tourismOffer.ReturnDate,
 			&tourismOffer.OfferDescription,
-			&tourismOffer.AgencyEmail); err != nil {
+			&tourismOffer.AgencyEmail,
+			&tourismOffer.OfferReference); err != nil {
 			fmt.Println("error getOfferByCompanyName error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -190,7 +192,8 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.DepartureDate,
 			&tourismOffer.ReturnDate,
 			&tourismOffer.OfferDescription,
-			&tourismOffer.AgencyEmail); err != nil {
+			&tourismOffer.AgencyEmail,
+			&tourismOffer.OfferReference); err != nil {
 			fmt.Println("error getAllTourismOffers error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -243,7 +246,8 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 			&tourismOffer.DepartureDate,
 			&tourismOffer.ReturnDate,
 			&tourismOffer.OfferDescription,
-			&tourismOffer.AgencyEmail); err != nil {
+			&tourismOffer.AgencyEmail,
+			&tourismOffer.OfferReference); err != nil {
 			fmt.Println("error getOfferByCity error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -294,7 +298,7 @@ func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.ReturnDate,
 			&tourismOffer.OfferDescription,
 			&tourismOffer.AgencyEmail,
-		); err != nil {
+			&tourismOffer.OfferReference); err != nil {
 			fmt.Println("error getHotOffers error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
