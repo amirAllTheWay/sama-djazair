@@ -34,6 +34,7 @@ type TourismOffer struct {
 	AgencyAddress    string `json:"agencyAddress"`
 	AgencyPhone      string `json:"agencyPhone"`
 	OfferReference   string `json:"offerReference"`
+	AgencyLogo       string `json:"agencyLogo"`
 }
 
 // OmraOffer represent a unit offer for tourism
@@ -56,6 +57,7 @@ type OmraOffer struct {
 	IsHotOffer        bool   `json:"isHotOffer"`
 	AgencyAddress     string `json:"agencyAddress"`
 	AgencyPhone       string `json:"agencyPhone"`
+	AgencyLogo        string `json:"agencyLogo"`
 }
 
 // TourismOffers is list of tourism offers
