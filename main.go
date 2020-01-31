@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	jwt "github.com/dgrijalva/jwt-go"
+	guuid "github.com/google/uuid"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -37,6 +38,65 @@ func allTourismOffers(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Println("Endpoint hit: All tourism offers endpoint")
 	json.NewEncoder(w).Encode(offers)
+}
+
+func (users *Users) addHotelPhoto(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Endpoint hit: addHotelPhoto")
+
+	decoder := json.NewDecoder(req.Body)
+	var hotelPhoto sdu.HotelPhoto
+	err := decoder.Decode(&hotelPhoto)
+	if err != nil {
+		panic(err)
+	}
+
+	//TODO handle offer reference column
+	insertHotelPhotoCmd := fmt.Sprintf("INSERT INTO HOTEL_PHOTOS "+
+		"(hotel_id, photo) VALUES " + "('%s','%s');",
+		hotelPhoto.HotelId, hotelPhoto.Photo)
+
+	if _, err := users.db.Query(insertHotelPhotoCmd); err != nil {
+		fmt.Println("Error inserting Hotel photo: %q", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+
+	fmt.Println("Inserted hotel photo: ", hotelPhoto.HotelId)
+	json.NewEncoder(w).Encode(httpResponse)
+	return
+}
+
+func (users *Users) addHotel(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Endpoint hit: addHotel")
+
+	decoder := json.NewDecoder(req.Body)
+	var hotel sdu.Hotel
+	err := decoder.Decode(&hotel)
+	if err != nil {
+		panic(err)
+	}
+
+	//TODO handle offer reference column
+	insertHotelCmd := fmt.Sprintf("INSERT INTO HOTELS "+
+		"(Id,Name, City, Stars, Agency) VALUES "+
+		"('%s', '%s','%s','%d','%s');",
+		guuid.New(), hotel.Name, hotel.City, hotel.Stars, hotel.Agency)
+
+	if _, err := users.db.Query(insertHotelCmd); err != nil {
+		fmt.Println("Error inserting Hotel: %q", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+
+	fmt.Println("Inserted hotel: ", hotel.Name)
+	json.NewEncoder(w).Encode(httpResponse)
+	return
 }
 
 func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
@@ -195,13 +255,36 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.OfferDescription,
 			&tourismOffer.AgencyEmail,
 			&tourismOffer.OfferReference,
-			&tourismOffer.AgencyLogo); err != nil {
+			&tourismOffer.AgencyLogo,
+			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getAllTourismOffers error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 		results = append(results, tourismOffer)
+	}
+
+	for i, result := range results {
+
+		getOfferPhotosReq := fmt.Sprintf("SELECT photo FROM HOTEL_PHOTOS WHERE hotel_id = '%s';", result.HotelId)
+
+		photoResults := make([]string, 0)
+		rows, _ := users.db.Query(getOfferPhotosReq)
+		for rows.Next() {
+			var photo string
+			if err := rows.Scan(&photo); err != nil {
+				log.Fatal(err)
+			}
+			photoResults = append(photoResults, photo)
+		}
+
+		results[i].HotelPhotos = append(results[i].HotelPhotos, photoResults...)
+		fmt.Println("getting hotel photo: ", len(result.HotelPhotos))
+	}
+
+	for _, item := range results {
+		fmt.Println("getting hotel photo: ", len(item.HotelPhotos))
 	}
 
 	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
@@ -250,7 +333,8 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 			&tourismOffer.OfferDescription,
 			&tourismOffer.AgencyEmail,
 			&tourismOffer.OfferReference,
-			&tourismOffer.AgencyLogo); err != nil {
+			&tourismOffer.AgencyLogo,
+			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getOfferByCity error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -302,7 +386,8 @@ func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.OfferDescription,
 			&tourismOffer.AgencyEmail,
 			&tourismOffer.OfferReference,
-			&tourismOffer.AgencyLogo); err != nil {
+			&tourismOffer.AgencyLogo,
+			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getHotOffers error: ", err)
 			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -566,6 +651,9 @@ func handleRequests() {
 	r.HandleFunc("/getOffers/getOfferByCity/{departureCity}/{destinationCity}", users.getOfferByCity).Methods("GET")
 	r.HandleFunc("/getOffers/allTourismOffers", users.getAllTourismOffers).Methods("GET")
 	r.HandleFunc("/getHotTourismOffers", users.getHotTourismOffers).Methods("GET")
+	//r.HandleFunc("/addAgencyLogo", users.addAgencyLogo).Methods("POST")
+	r.HandleFunc("/addHotel", users.addHotel).Methods("POST")
+	r.HandleFunc("/addHotelPhoto", users.addHotelPhoto).Methods("POST")
 
 	// User management
 	r.HandleFunc("/addUser", users.addUser).Methods("POST")
