@@ -69,6 +69,36 @@ func (users *Users) addHotelPhoto(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+
+func (users *Users) generatePreorder(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Endpoint hit: generatePreorder")
+
+	decoder := json.NewDecoder(req.Body)
+	var preorder sdu.Preorder
+	err := decoder.Decode(&preorder)
+	if err != nil {
+		panic(err)
+	}
+
+	var preorderId = guuid.New();
+	insertPreorderCmd := fmt.Sprintf("INSERT INTO PREORDER "+
+		"(Id, offer_reference, user_first_name, user_last_name, user_email, user_phone, number_rooms, number_adults, number_children, number_babies, complementary_info) VALUES "+
+		"('%s','%s','%s','%s','%s','%s','%d','%d','%d','%d','%s');",
+		preorderId, preorder.OfferReference, preorder.UserFirstName, preorder.UserLastName, preorder.UserEmail, preorder.UserPhone, preorder.NumberRooms, preorder.NumberAdults, preorder.NumberChildren, preorder.NumberBabies, preorder.ComplementaryInfo)
+
+	if _, err := users.db.Query(insertPreorderCmd); err != nil {
+		fmt.Println("Error inserting Preorder: %q", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success", Id: preorderId.String()}
+
+	fmt.Println("Inserted Preorder: ", preorder.OfferReference)
+	json.NewEncoder(w).Encode(httpResponse)
+	return
+}
 func (users *Users) addHotel(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addHotel")
 
@@ -92,7 +122,7 @@ func (users *Users) addHotel(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success" }
 
 	fmt.Println("Inserted hotel: ", hotel.Name)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -172,7 +202,6 @@ func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Reque
 
 	getOfferByCompanyReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE flyingcompany LIKE '%s';", companyName)
 
-	fmt.Println("select command: ", getOfferByCompanyReq)
 	rows, err := users.db.Query(getOfferByCompanyReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
@@ -223,7 +252,6 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 
 	getOfferByCompanyReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS;")
 
-	fmt.Println("select command: ", getOfferByCompanyReq)
 	rows, err := users.db.Query(getOfferByCompanyReq)
 	if err != nil {
 		fmt.Println("Error getting all tourism offers: ", err)
@@ -280,11 +308,6 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 		}
 
 		results[i].HotelPhotos = append(results[i].HotelPhotos, photoResults...)
-		fmt.Println("getting hotel photo: ", len(result.HotelPhotos))
-	}
-
-	for _, item := range results {
-		fmt.Println("getting hotel photo: ", len(item.HotelPhotos))
 	}
 
 	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
@@ -302,7 +325,6 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 
 	getOfferByCityReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE departureCity LIKE '%s' AND destinationCity LIKE '%s';", departureCity, destinationCity)
 
-	fmt.Println("select command: ", getOfferByCityReq)
 	rows, err := users.db.Query(getOfferByCityReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
@@ -349,12 +371,153 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 	return
 }
 
+func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
+	offerReference := sdu.URLParamAsString("offer_reference", req)
+	preorderID := sdu.URLParamAsString("preorder_id", req)
+	fmt.Println("getPreorderData : ", offerReference)
+
+	getPreorderReq := fmt.Sprintf("SELECT * FROM PREORDER WHERE id = '%s';", preorderID)
+
+	fmt.Println("getPreorderReq : ", getPreorderReq)
+
+	rows, err := users.db.Query(getPreorderReq)
+	if err != nil {
+		fmt.Println("Error getting offer: ", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	defer rows.Close()
+	var preorders []sdu.Preorder
+	for rows.Next() {
+		var preorder sdu.Preorder
+		if err := rows.Scan(
+			&preorder.OfferReference,
+			&preorder.UserFirstName,
+			&preorder.UserLastName,
+			&preorder.UserEmail,
+			&preorder.UserPhone,
+			&preorder.NumberRooms,
+			&preorder.NumberAdults,
+			&preorder.NumberChildren,
+			&preorder.NumberBabies,
+			&preorder.ComplementaryInfo,
+			&preorder.Id); err != nil {
+			fmt.Println("error getPreorderData error: ", err)
+			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			json.NewEncoder(w).Encode(httpResponse)
+			return
+		}
+		preorders = append(preorders, preorder)
+	}
+
+	getOfferByRefReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE offer_reference LIKE '%s';", offerReference)
+
+	rows, err = users.db.Query(getOfferByRefReq)
+	if err != nil {
+		fmt.Println("Error getting offer: ", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+/*
+	defer rows.Close()
+	var results sdu.TourismOffers
+	for rows.Next() {
+		var tourismOffer sdu.TourismOffer
+		if err := rows.Scan(&tourismOffer.FlyingCompany,
+			&tourismOffer.DepartureCity,
+			&tourismOffer.DestinationCity,
+			&tourismOffer.Hotel,
+			&tourismOffer.Price,
+			&tourismOffer.HotelImage,
+			&tourismOffer.TravelAgency,
+			&tourismOffer.TravelDuration,
+			&tourismOffer.HotelStars,
+			&tourismOffer.IsHotOffer,
+			&tourismOffer.AgencyAddress,
+			&tourismOffer.AgencyPhone,
+			&tourismOffer.OfferTitle,
+			&tourismOffer.DepartureDate,
+			&tourismOffer.ReturnDate,
+			&tourismOffer.OfferDescription,
+			&tourismOffer.AgencyEmail,
+			&tourismOffer.OfferReference,
+			&tourismOffer.AgencyLogo,
+			&tourismOffer.HotelId); err != nil {
+			fmt.Println("error getPreorderData error: ", err)
+			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			json.NewEncoder(w).Encode(httpResponse)
+			return
+		}
+		results = append(results, tourismOffer)
+	}*/
+
+	var preorderData sdu.PreorderData
+	//preorderData.Offer = results[0]
+	preorderData.Preorder = preorders[0]
+
+	hdr := sdu.PreorderHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: preorderData}
+	json.NewEncoder(w).Encode(hdr)
+	return
+}
+
+func (users *Users) getOfferByReference(w http.ResponseWriter, req *http.Request) {
+	offerReference := sdu.URLParamAsString("reference", req)
+	fmt.Println("getOfferByReference : ", offerReference)
+
+	getOfferByRefReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE offer_reference LIKE '%s';", offerReference)
+
+	rows, err := users.db.Query(getOfferByRefReq)
+	if err != nil {
+		fmt.Println("Error getting offer: ", err)
+		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	defer rows.Close()
+	var results sdu.TourismOffers
+	for rows.Next() {
+		var tourismOffer sdu.TourismOffer
+		if err := rows.Scan(&tourismOffer.FlyingCompany,
+			&tourismOffer.DepartureCity,
+			&tourismOffer.DestinationCity,
+			&tourismOffer.Hotel,
+			&tourismOffer.Price,
+			&tourismOffer.HotelImage,
+			&tourismOffer.TravelAgency,
+			&tourismOffer.TravelDuration,
+			&tourismOffer.HotelStars,
+			&tourismOffer.IsHotOffer,
+			&tourismOffer.AgencyAddress,
+			&tourismOffer.AgencyPhone,
+			&tourismOffer.OfferTitle,
+			&tourismOffer.DepartureDate,
+			&tourismOffer.ReturnDate,
+			&tourismOffer.OfferDescription,
+			&tourismOffer.AgencyEmail,
+			&tourismOffer.OfferReference,
+			&tourismOffer.AgencyLogo,
+			&tourismOffer.HotelId); err != nil {
+			fmt.Println("error getOfferByReference error: ", err)
+			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			json.NewEncoder(w).Encode(httpResponse)
+			return
+		}
+		results = append(results, tourismOffer)
+	}
+
+	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	json.NewEncoder(w).Encode(hdr)
+	return
+}
 func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("get All getHotTourismOffers")
 
 	getHotOffers := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE ishotoffer is true;")
 
-	fmt.Println("select command: ", getHotOffers)
 	rows, err := users.db.Query(getHotOffers)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
@@ -398,8 +561,6 @@ func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request
 
 	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 	json.NewEncoder(w).Encode(hdr)
-
-	fmt.Println("select command: ", w)
 
 	return
 }
@@ -651,9 +812,12 @@ func handleRequests() {
 	r.HandleFunc("/getOffers/getOfferByCity/{departureCity}/{destinationCity}", users.getOfferByCity).Methods("GET")
 	r.HandleFunc("/getOffers/allTourismOffers", users.getAllTourismOffers).Methods("GET")
 	r.HandleFunc("/getHotTourismOffers", users.getHotTourismOffers).Methods("GET")
+	r.HandleFunc("/tourismOffer/{reference}", users.getOfferByReference).Methods("GET")
+	r.HandleFunc("/preorder/{offer_reference}/{preorder_id}", users.getPreorderData).Methods("GET")
 	//r.HandleFunc("/addAgencyLogo", users.addAgencyLogo).Methods("POST")
 	r.HandleFunc("/addHotel", users.addHotel).Methods("POST")
 	r.HandleFunc("/addHotelPhoto", users.addHotelPhoto).Methods("POST")
+	r.HandleFunc("/generatePreorder", users.generatePreorder).Methods("POST")
 
 	// User management
 	r.HandleFunc("/addUser", users.addUser).Methods("POST")

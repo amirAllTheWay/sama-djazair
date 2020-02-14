@@ -92,6 +92,13 @@ type TourismOffersHTTPResponse struct {
 	Data            TourismOffers `json:"tourismOffers"`
 }
 
+// PreorderHTTPResponse represents data for tourism offers
+type PreorderHTTPResponse struct {
+	ResponseDetails HTTPResponse  `json:"httpResponse"`
+	Data            PreorderData `json:"preorderData"`
+}
+
+
 type User struct {
 	Username string `json:username`
 	Email    string `json:email`
@@ -102,6 +109,7 @@ type User struct {
 type HTTPResponse struct {
 	ResponseCode    int    `json:"responseCode"`
 	ResponseMessage string `json:"responseMessage"`
+	Id        		string `json:"id"`
 }
 
 type AuthenticationData struct {
@@ -113,4 +121,24 @@ type AuthenticationData struct {
 type AuthenticationHTTPResponse struct {
 	AuthData        AuthenticationData `json:"authData"`
 	ResponseDetails HTTPResponse       `json:"httpResponse"`
+}
+
+
+type Preorder struct {
+	Id        		string `json:"id"`
+	OfferReference    string `json:"offerReference"`
+	UserFirstName    string `json:"userFirstName"`
+	UserLastName     string `json:"userLastName"`
+	UserEmail         string `json:"userEmail"`
+	UserPhone         string `json:"userPhone"`
+	NumberRooms       int    `json:"numberRooms"`
+	NumberAdults      int    `json:"numberAdults"`
+	NumberChildren    int    `json:"numberChildren"`
+	NumberBabies      int    `json:"numberBabies"`
+	ComplementaryInfo string `json:"complementaryInfo"`
+}
+
+type PreorderData struct {
+	Offer TourismOffer `json:"offer"`
+	Preorder Preorder `json:"preorder"`
 }
