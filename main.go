@@ -13,7 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	sdu "sama-djazair/utils"
+	sdu "github.com/amirAllTheWay/sama-djazair/utils"
 )
 
 // Users represent connection to sql DB
