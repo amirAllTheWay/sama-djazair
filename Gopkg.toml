@@ -36,3 +36,8 @@
 [prune]
   go-tests = true
   unused-packages = true
+
+[metadata.heroku]
+  root-package = "github.com/amirAllTheWay/sama-djazair"
+  go-version = "go1.13.8"
+  install = [ "./..." ]
