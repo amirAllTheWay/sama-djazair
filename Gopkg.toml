@@ -39,7 +39,6 @@
 
 [metadata.heroku]
   root-package = "github.com/amirAllTheWay/sama-djazair"
-  install = [ "./..." ]
   go-version = "go1.9"
   ensure = "true"
 [[constraint]]
