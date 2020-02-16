@@ -42,3 +42,6 @@
   install = [ "./..." ]
   go-version = "go1.9"
   ensure = "true"
+[[constraint]]
+  branch = "master"
+  name = "github.com/amirAllTheWay/sama-djazair"

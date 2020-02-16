@@ -2,6 +2,14 @@
 
 
 [[projects]]
+  branch = "master"
+  digest = "1:bfeabe39e0e6a59a3c0beca1d42fa5f8d16fa0a0137c69c364f8e13a4d10bc34"
+  name = "github.com/amirAllTheWay/sama-djazair"
+  packages = ["utils"]
+  pruneopts = "UT"
+  revision = "83555bd5516be872b6bc63eb4f5ca2f33f954e54"
+
+[[projects]]
   digest = "1:155ca6abe1f334b4d5a9f3bc2452f89eda8a785c3c4d395d9ebb039a503592d1"
   name = "github.com/dgrijalva/jwt-go"
   packages = ["."]
@@ -64,6 +72,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/amirAllTheWay/sama-djazair/utils",
     "github.com/dgrijalva/jwt-go",
     "github.com/google/uuid",
     "github.com/gorilla/handlers",
