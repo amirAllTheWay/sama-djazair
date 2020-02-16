@@ -39,5 +39,5 @@
 
 [metadata.heroku]
   root-package = "github.com/amirAllTheWay/sama-djazair"
-  go-version = "go1.7"
+  go-version = "go1.9"
   ensure = "true"
