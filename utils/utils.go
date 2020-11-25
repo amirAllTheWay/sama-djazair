@@ -5,13 +5,49 @@ import (
 	"github.com/gorilla/mux"
 	"net/http"
 )
-
+const typedHello string = "Hello, 世界"
 // URLParamAsString returns an URL parameter /{name} as a string
-func URLParamAsString(name string, r *http.Request) string {
+func URLParamAsString(name string, r *http.Request) *string {
 	vars := mux.Vars(r)
-	fmt.Println("URLParamAsString : ", vars)
 	value := vars[name]
-	return value
+	return &value
+}
+
+func GenerateSQLRequest(tableName string, parameters []string, r *http.Request) string {
+	// retrieve parameters
+	// map for parameters/values
+	paramsMap := make(map[string]string)
+
+	for _, paramName := range parameters {
+		paramValue := r.URL.Query()[paramName]
+		fmt.Println("------- paramName: ", paramName)
+		fmt.Println("------- paramValue: ", paramValue)
+
+		if paramValue != nil {
+			paramsMap[paramName] = paramValue[0]
+		}
+	}
+	fmt.Println(paramsMap)
+	request :=  "SELECT * FROM " + tableName
+	index := 0
+
+	if len(paramsMap) > 0 {
+		request = request +  " WHERE "
+		// loop over map
+		for key, value := range paramsMap {
+			request = request + key + " = " + "'" + value + "'"
+			if(index < len(paramsMap) - 1) {
+				request += " AND "
+			}
+			index++
+		}
+
+	} else {
+		request = request +  ";"
+	}
+
+	fmt.Println(request)
+	return request
 }
 
 // TourismOffer represent a unit offer for tourism
@@ -22,12 +58,11 @@ type TourismOffer struct {
 	DestinationCity  string `json:"destinationCity"`
 	DepartureDate    string `json:"departureDate"`
 	ReturnDate       string `json:"returnDate"`
-	Hotel            string `json:"hotelName"`
-	Price            string `json:"offerPrice"`
+	HotelName        string `json:"hotelName"`
+	OfferPrice       string `json:"offerPrice"`
 	OfferDescription string `json:"offerDescription"`
-	HotelImage       string `json:"hotelImage"`
 	TravelAgency     string `json:"travelAgency"`
-	AgencyEmail      string `json:"AgencyEmail"`
+	AgencyEmail      string `json:"agencyEmail"`
 	TravelDuration   int    `json:"travelDuration"`
 	HotelStars       int    `json:"hotelStars"`
 	IsHotOffer       bool   `json:"isHotOffer"`
@@ -48,10 +83,9 @@ type OmraOffer struct {
 	DistanceFromHaram string `json:"distanceFromHaram"`
 	DepartureDate     string `json:"departureDate"`
 	ReturnDate        string `json:"returnDate"`
-	Hotel             string `json:"hotelName"`
-	Price             string `json:"offerPrice"`
+	HotelName         string `json:"hotelName"`
+	OfferPrice        string `json:"offerPrice"`
 	OfferDescription  string `json:"offerDescription"`
-	HotelImage        string `json:"hotelImage"`
 	TravelAgency      string `json:"travelAgency"`
 	AgencyEmail       string `json:"AgencyEmail"`
 	TravelDuration    int    `json:"travelDuration"`
