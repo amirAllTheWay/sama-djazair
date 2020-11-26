@@ -1088,7 +1088,7 @@ func handleRequests() {
 	if port == "" {
 		port = "8000"
 	}
-
+	/*
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+"password=%s sslmode=disable", host, dbPort, user, password)
 
 	db, err := sql.Open("postgres", psqlInfo)
@@ -1104,14 +1104,15 @@ func handleRequests() {
 	}
 
 	fmt.Println("Successfully !,", port)
+	*/
 
-	/*
-		db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
-		if err != nil {
-			log.Fatalf("Error opening database: %q", err)
-		} else {
-			fmt.Println("Successfully connected to DB! port: %q", port)
-		}*/
+
+	db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("Error opening database: %q", err)
+	} else {
+		fmt.Println("Successfully connected to DB! port: %q", port)
+	}
 
 	users := &Users{db: db}
 
