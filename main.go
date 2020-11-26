@@ -13,7 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
-	sdu "sama-djazair/utils"
+	"time"
 )
 
 // Users represent connection to sql DB
@@ -22,6 +22,199 @@ type Users struct {
 }
 
 var mySigningString = []byte("mysupersecretphrase")
+
+// GenerateJWT generates a jwt token
+func GenerateJWT() (string, error)  {
+
+	token := jwt.New(jwt.SigningMethodHS256)
+
+	claims := token.Claims.(jwt.MapClaims)
+
+	claims["authorized"] = true
+	claims["user"] = "Amir Attar"
+	claims["exp"] = time.Now().Add(time.Minute*30).Unix()
+
+	tokenString, err := token.SigningString()
+
+	if err != nil {
+		fmt.Errorf("Something went wrong: %s", err.Error())
+		return "", err
+	}
+
+	return tokenString, nil
+}
+
+const typedHello string = "Hello, 世界"
+// URLParamAsString returns an URL parameter /{name} as a string
+func URLParamAsString(name string, r *http.Request) *string {
+	vars := mux.Vars(r)
+	value := vars[name]
+	return &value
+}
+
+func GenerateSQLRequest(tableName string, parameters []string, r *http.Request) string {
+	// retrieve parameters
+	// map for parameters/values
+	paramsMap := make(map[string]string)
+
+	for _, paramName := range parameters {
+		paramValue := r.URL.Query()[paramName]
+		fmt.Println("------- paramName: ", paramName)
+		fmt.Println("------- paramValue: ", paramValue)
+
+		if paramValue != nil {
+			paramsMap[paramName] = paramValue[0]
+		}
+	}
+	fmt.Println(paramsMap)
+	request :=  "SELECT * FROM " + tableName
+	index := 0
+
+	if len(paramsMap) > 0 {
+		request = request +  " WHERE "
+		// loop over map
+		for key, value := range paramsMap {
+			request = request + key + " = " + "'" + value + "'"
+			if(index < len(paramsMap) - 1) {
+				request += " AND "
+			}
+			index++
+		}
+
+	} else {
+		request = request +  ";"
+	}
+
+	fmt.Println(request)
+	return request
+}
+
+// TourismOffer represent a unit offer for tourism
+type TourismOffer struct {
+	OfferTitle       string `json:"offerTitle"`
+	FlyingCompany    string `json:"flyingCompany"`
+	DepartureCity    string `json:"departureCity"`
+	DestinationCity  string `json:"destinationCity"`
+	DepartureDate    string `json:"departureDate"`
+	ReturnDate       string `json:"returnDate"`
+	HotelName        string `json:"hotelName"`
+	OfferPrice       string `json:"offerPrice"`
+	OfferDescription string `json:"offerDescription"`
+	TravelAgency     string `json:"travelAgency"`
+	AgencyEmail      string `json:"agencyEmail"`
+	TravelDuration   int    `json:"travelDuration"`
+	HotelStars       int    `json:"hotelStars"`
+	IsHotOffer       bool   `json:"isHotOffer"`
+	AgencyAddress    string `json:"agencyAddress"`
+	AgencyPhone      string `json:"agencyPhone"`
+	OfferReference   string `json:"offerReference"`
+	AgencyLogo       string `json:"agencyLogo"`
+	HotelId   		 string `json:"hotelId"`
+	HotelPhotos   	[]string `json:"hotelPhotos"`
+}
+
+// OmraOffer represent a unit offer for tourism
+type OmraOffer struct {
+	OfferTitle        string `json:"offerTitle"`
+	FlyingCompany     string `json:"flyingCompany"`
+	DepartureCity     string `json:"departureCity"`
+	DestinationCity   string `json:"destinationCity"`
+	DistanceFromHaram string `json:"distanceFromHaram"`
+	DepartureDate     string `json:"departureDate"`
+	ReturnDate        string `json:"returnDate"`
+	HotelName         string `json:"hotelName"`
+	OfferPrice        string `json:"offerPrice"`
+	OfferDescription  string `json:"offerDescription"`
+	TravelAgency      string `json:"travelAgency"`
+	AgencyEmail       string `json:"AgencyEmail"`
+	TravelDuration    int    `json:"travelDuration"`
+	HotelStars        int    `json:"hotelStars"`
+	IsHotOffer        bool   `json:"isHotOffer"`
+	AgencyAddress     string `json:"agencyAddress"`
+	AgencyPhone       string `json:"agencyPhone"`
+	AgencyLogo        string `json:"agencyLogo"`
+}
+
+// Hotel represent a Hotel
+type Hotel struct {
+	Id        string `json:"id"`
+	Name     string `json:"name"`
+	City     string `json:"city"`
+	Stars   int `json:"stars"`
+	Agency     string `json:"agency"`
+}
+
+// HotelPhoto represent a Hotel
+type HotelPhoto struct {
+	HotelId        string `json:"hotel_id"`
+	Photo     string `json:"photo"`
+}
+
+// HotelPhotos represent a Hotel
+type HotelPhotos struct {
+	Id        string `json:"id"`
+	Photos  []string `json:"Photos"`
+}
+
+// TourismOffers is list of tourism offers
+type TourismOffers []TourismOffer
+
+// TourismOffersHTTPResponse represents data for tourism offers
+type TourismOffersHTTPResponse struct {
+	ResponseDetails HTTPResponse  `json:"httpResponse"`
+	Data            TourismOffers `json:"tourismOffers"`
+}
+
+// PreorderHTTPResponse represents data for tourism offers
+type PreorderHTTPResponse struct {
+	ResponseDetails HTTPResponse  `json:"httpResponse"`
+	Data            PreorderData `json:"preorderData"`
+}
+
+
+type User struct {
+	Username string `json:username`
+	Email    string `json:email`
+	Password string `json:password`
+}
+
+// HTTPResponse represents generic http response
+type HTTPResponse struct {
+	ResponseCode    int    `json:"responseCode"`
+	ResponseMessage string `json:"responseMessage"`
+	Id        		string `json:"id"`
+}
+
+type AuthenticationData struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Token    string `json:"token"`
+}
+
+type AuthenticationHTTPResponse struct {
+	AuthData        AuthenticationData `json:"authData"`
+	ResponseDetails HTTPResponse       `json:"httpResponse"`
+}
+
+
+type Preorder struct {
+	Id        		string `json:"id"`
+	OfferReference    string `json:"offerReference"`
+	UserFirstName    string `json:"userFirstName"`
+	UserLastName     string `json:"userLastName"`
+	UserEmail         string `json:"userEmail"`
+	UserPhone         string `json:"userPhone"`
+	NumberRooms       int    `json:"numberRooms"`
+	NumberAdults      int    `json:"numberAdults"`
+	NumberChildren    int    `json:"numberChildren"`
+	NumberBabies      int    `json:"numberBabies"`
+	ComplementaryInfo string `json:"complementaryInfo"`
+}
+
+type PreorderData struct {
+	Offer TourismOffer `json:"offer"`
+	Preorder Preorder `json:"preorder"`
+}
 
 const (
 	host     = "localhost"
@@ -39,22 +232,22 @@ func (users *Users) tourismOffers(w http.ResponseWriter, req *http.Request) {
 	//destinationCity,_ := req.URL.Query()["destinationCity"]
 
 	//getOfferByCityReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE destinationCity LIKE '%s';", destinationCity[0])
-	getOfferByCityReq := sdu.GenerateSQLRequest("TOURISM_OFFERS", paramArray, req)
+	getOfferByCityReq := GenerateSQLRequest("TOURISM_OFFERS", paramArray, req)
 	fmt.Println("********** get All tourismOffers: ", getOfferByCityReq)
 
 	fmt.Println("------- get All tourismOffers getOfferByCityReq: ", getOfferByCityReq)
     rows, err := users.db.Query(getOfferByCityReq)
     if err != nil {
         fmt.Println("Error getting offer: 1 ", err)
-        httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+        httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
         json.NewEncoder(w).Encode(httpResponse)
         return
     }
 
     defer rows.Close()
-    var results sdu.TourismOffers
+    var results TourismOffers
     for rows.Next() {
-        var tourismOffer sdu.TourismOffer
+        var tourismOffer TourismOffer
         if err := rows.Scan(&tourismOffer.FlyingCompany,
             &tourismOffer.DepartureCity,
             &tourismOffer.DestinationCity,
@@ -75,7 +268,7 @@ func (users *Users) tourismOffers(w http.ResponseWriter, req *http.Request) {
             &tourismOffer.AgencyLogo,
             &tourismOffer.HotelId); err != nil {
             fmt.Println("error getOfferByCity error: 2 ", err)
-            httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+            httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
             json.NewEncoder(w).Encode(httpResponse)
             return
         }
@@ -98,7 +291,7 @@ func (users *Users) tourismOffers(w http.ResponseWriter, req *http.Request) {
 		results[i].HotelPhotos = append(results[i].HotelPhotos, photoResults...)
 	}
 
-    hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+    hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 
     fmt.Println("getOfferByCity 1: ", len(results))
     json.NewEncoder(w).Encode(hdr)
@@ -110,7 +303,7 @@ func (users *Users) addHotelPhoto(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addHotelPhoto")
 
 	decoder := json.NewDecoder(req.Body)
-	var hotelPhoto sdu.HotelPhoto
+	var hotelPhoto HotelPhoto
 	err := decoder.Decode(&hotelPhoto)
 	if err != nil {
 		panic(err)
@@ -123,12 +316,12 @@ func (users *Users) addHotelPhoto(w http.ResponseWriter, req *http.Request) {
 
 	if _, err := users.db.Query(insertHotelPhotoCmd); err != nil {
 		fmt.Println("Error inserting Hotel photo: %q", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+	httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
 
 	fmt.Println("Inserted hotel photo: ", hotelPhoto.HotelId)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -140,7 +333,7 @@ func (users *Users) generatePreorder(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: generatePreorder")
 
 	decoder := json.NewDecoder(req.Body)
-	var preorder sdu.Preorder
+	var preorder Preorder
 	err := decoder.Decode(&preorder)
 	if err != nil {
 		panic(err)
@@ -154,12 +347,12 @@ func (users *Users) generatePreorder(w http.ResponseWriter, req *http.Request) {
 
 	if _, err := users.db.Query(insertPreorderCmd); err != nil {
 		fmt.Println("Error inserting Preorder: %q", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success", Id: preorderId.String()}
+	httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success", Id: preorderId.String()}
 
 	fmt.Println("Inserted Preorder: ", preorder.OfferReference)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -169,7 +362,7 @@ func (users *Users) addHotel(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addHotel")
 
 	decoder := json.NewDecoder(req.Body)
-	var hotel sdu.Hotel
+	var hotel Hotel
 	err := decoder.Decode(&hotel)
 	if err != nil {
 		panic(err)
@@ -183,12 +376,12 @@ func (users *Users) addHotel(w http.ResponseWriter, req *http.Request) {
 
 	if _, err := users.db.Query(insertHotelCmd); err != nil {
 		fmt.Println("Error inserting Hotel: %q", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success" }
+	httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success" }
 
 	fmt.Println("Inserted hotel: ", hotel.Name)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -199,7 +392,7 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addTourismOffer")
 
 	decoder := json.NewDecoder(req.Body)
-	var tourismOffer sdu.TourismOffer
+	var tourismOffer TourismOffer
 	err := decoder.Decode(&tourismOffer)
 	if err != nil {
 		panic(err)
@@ -220,12 +413,12 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 	if _, err := users.db.Query(insertOfferCmd); err != nil {
 		fmt.Println("Error inserting offer: %q", err)
 		//http.Error(w, err.Error(), http.StatusInternalServerError)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+	httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
 
 	fmt.Println("Inserted offer: ", tourismOffer.HotelName)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -236,7 +429,7 @@ func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("Endpoint hit: addOmraOffer")
 
 	decoder := json.NewDecoder(req.Body)
-	var omraOffer sdu.OmraOffer
+	var omraOffer OmraOffer
 	err := decoder.Decode(&omraOffer)
 	if err != nil {
 		panic(err)
@@ -253,12 +446,12 @@ func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
 	if _, err := users.db.Query(insertOfferCmd); err != nil {
 		fmt.Println("Error inserting offer: %q", err)
 		//http.Error(w, err.Error(), http.StatusInternalServerError)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
-	httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
+	httpResponse := HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "success"}
 
 	fmt.Println("Inserted omra offer: ", omraOffer.HotelName)
 	json.NewEncoder(w).Encode(httpResponse)
@@ -267,7 +460,7 @@ func (users *Users) addOmraOffer(w http.ResponseWriter, req *http.Request) {
 
 func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Request) {
 
-	companyName := sdu.URLParamAsString("companyName", req)
+	companyName := URLParamAsString("companyName", req)
 	fmt.Println("getOfferByCompanyName : ", companyName)
 
 	getOfferByCompanyReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE flyingCompany LIKE '%s';", companyName)
@@ -275,15 +468,15 @@ func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Reque
 	rows, err := users.db.Query(getOfferByCompanyReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var results sdu.TourismOffers
+	var results TourismOffers
 	for rows.Next() {
-		var tourismOffer sdu.TourismOffer
+		var tourismOffer TourismOffer
 		if err := rows.Scan(&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
 			&tourismOffer.DestinationCity,
@@ -303,14 +496,14 @@ func (users *Users) getOfferByCompanyName(w http.ResponseWriter, req *http.Reque
 			&tourismOffer.OfferReference,
 			&tourismOffer.AgencyLogo); err != nil {
 			fmt.Println("error getOfferByCompanyName error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 		results = append(results, tourismOffer)
 	}
 
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 	fmt.Println("getOfferByCompanyName found offers: ", hdr)
 	json.NewEncoder(w).Encode(hdr)
 	return
@@ -324,15 +517,15 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 	rows, err := users.db.Query(getOfferByCompanyReq)
 	if err != nil {
 		fmt.Println("Error getting all tourism offers: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var results sdu.TourismOffers
+	var results TourismOffers
 	for rows.Next() {
-		var tourismOffer sdu.TourismOffer
+		var tourismOffer TourismOffer
 		if err := rows.Scan(
 			&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
@@ -354,7 +547,7 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.AgencyLogo,
 			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getAllTourismOffers error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
@@ -378,39 +571,39 @@ func (users *Users) getAllTourismOffers(w http.ResponseWriter, req *http.Request
 		results[i].HotelPhotos = append(results[i].HotelPhotos, photoResults...)
 	}
 
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 	//fmt.Println("getAllTourismOffers found offers: ", hdr)
 	json.NewEncoder(w).Encode(hdr)
 	return
 }
 func (users *Users) getOffersByParameters(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("get All getOffersByParameters")
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}}
 	json.NewEncoder(w).Encode(hdr)
 
 	return
 }
 func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 	paramArray := []string{"departureCity", "destinationCity"}
-	fmt.Println("get All getOfferByCity 2: ", sdu.GenerateSQLRequest("TOURISM_OFFERS", paramArray, req))
+	fmt.Println("get All getOfferByCity 2: ", GenerateSQLRequest("TOURISM_OFFERS", paramArray, req))
 
-	//departureCity := sdu.URLParamAsString("departureCity", req)
-	//destinationCity := sdu.URLParamAsString("destinationCity", req)
+	//departureCity := URLParamAsString("departureCity", req)
+	//destinationCity := URLParamAsString("destinationCity", req)
 
 	//getOfferByCityReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE departureCity LIKE '%s' AND destinationCity LIKE '%s';", departureCity, destinationCity)
-	getOfferByCityReq := sdu.GenerateSQLRequest("TOURISM_OFFERS", paramArray, req)
+	getOfferByCityReq := GenerateSQLRequest("TOURISM_OFFERS", paramArray, req)
 	rows, err := users.db.Query(getOfferByCityReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var results sdu.TourismOffers
+	var results TourismOffers
 	for rows.Next() {
-		var tourismOffer sdu.TourismOffer
+		var tourismOffer TourismOffer
 		if err := rows.Scan(&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
 			&tourismOffer.DestinationCity,
@@ -431,7 +624,7 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 			&tourismOffer.AgencyLogo,
 			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getOfferByCity error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
@@ -457,7 +650,7 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 		results[i].HotelPhotos = append(results[i].HotelPhotos, photoResults...)
 	}
 
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 
 	fmt.Println("getOfferByCity 3: ", len(results))
 	json.NewEncoder(w).Encode(hdr)
@@ -466,8 +659,8 @@ func (users *Users) getOfferByCity(w http.ResponseWriter, req *http.Request) {
 }
 
 func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
-	offerReference := sdu.URLParamAsString("offer_reference", req)
-	preorderID := sdu.URLParamAsString("preorder_id", req)
+	offerReference := URLParamAsString("offer_reference", req)
+	preorderID := URLParamAsString("preorder_id", req)
 	fmt.Println("getPreorderData : ", offerReference)
 
 	getPreorderReq := fmt.Sprintf("SELECT * FROM PREORDER WHERE id = '%s';", preorderID)
@@ -477,15 +670,15 @@ func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
 	rows, err := users.db.Query(getPreorderReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var preorders []sdu.Preorder
+	var preorders []Preorder
 	for rows.Next() {
-		var preorder sdu.Preorder
+		var preorder Preorder
 		if err := rows.Scan(
 			&preorder.OfferReference,
 			&preorder.UserFirstName,
@@ -499,7 +692,7 @@ func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
 			&preorder.ComplementaryInfo,
 			&preorder.Id); err != nil {
 			fmt.Println("error getPreorderData error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
@@ -511,7 +704,7 @@ func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
 	rows, err = users.db.Query(getOfferByRefReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
@@ -547,17 +740,17 @@ func (users *Users) getPreorderData(w http.ResponseWriter, req *http.Request) {
 		results = append(results, tourismOffer)
 	}*/
 
-	var preorderData sdu.PreorderData
+	var preorderData PreorderData
 	//preorderData.Offer = results[0]
 	preorderData.Preorder = preorders[0]
 
-	hdr := sdu.PreorderHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: preorderData}
+	hdr := PreorderHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: preorderData}
 	json.NewEncoder(w).Encode(hdr)
 	return
 }
 
 func (users *Users) getOfferByReference(w http.ResponseWriter, req *http.Request) {
-	offerReference := sdu.URLParamAsString("reference", req)
+	offerReference := URLParamAsString("reference", req)
 	fmt.Println("getOfferByReference : ", offerReference)
 
 	getOfferByRefReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE offerReference LIKE '%s';", offerReference)
@@ -565,15 +758,15 @@ func (users *Users) getOfferByReference(w http.ResponseWriter, req *http.Request
 	rows, err := users.db.Query(getOfferByRefReq)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var results sdu.TourismOffers
+	var results TourismOffers
 	for rows.Next() {
-		var tourismOffer sdu.TourismOffer
+		var tourismOffer TourismOffer
 		if err := rows.Scan(&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
 			&tourismOffer.DestinationCity,
@@ -594,14 +787,14 @@ func (users *Users) getOfferByReference(w http.ResponseWriter, req *http.Request
 			&tourismOffer.AgencyLogo,
 			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getOfferByReference error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 		results = append(results, tourismOffer)
 	}
 
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 	json.NewEncoder(w).Encode(hdr)
 	return
 }
@@ -616,15 +809,15 @@ func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request
 	rows, err := users.db.Query(getHotOffers)
 	if err != nil {
 		fmt.Println("Error getting offer: ", err)
-		httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+		httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
 
 	defer rows.Close()
-	var results sdu.TourismOffers
+	var results TourismOffers
 	for rows.Next() {
-		var tourismOffer sdu.TourismOffer
+		var tourismOffer TourismOffer
 		if err := rows.Scan(
 			&tourismOffer.FlyingCompany,
 			&tourismOffer.DepartureCity,
@@ -646,14 +839,14 @@ func (users *Users) getHotTourismOffers(w http.ResponseWriter, req *http.Request
 			&tourismOffer.AgencyLogo,
 			&tourismOffer.HotelId); err != nil {
 			fmt.Println("error getHotOffers error: ", err)
-			httpResponse := sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
+			httpResponse := HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 		results = append(results, tourismOffer)
 	}
 
-	hdr := sdu.TourismOffersHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
+	hdr := TourismOffersHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"}, Data: results}
 	json.NewEncoder(w).Encode(hdr)
 
 	return
@@ -677,14 +870,14 @@ func (users *Users) addAgencyLogo(w http.ResponseWriter, req *http.Request) {
 
 
 	fmt.Println("[addUser] user exists: ", existingUser.Email)
-	httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Email déjà utilisé"}}
+	httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Email déjà utilisé"}}
 	json.NewEncoder(w).Encode(httpResponse)
 	return
 }
 */
-func (users *Users) getUserInDB(emailToCheck string) (*sdu.User, error) {
+func (users *Users) getUserInDB(emailToCheck string) (*User, error) {
 
-	var existingUser sdu.User
+	var existingUser User
 
 	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", emailToCheck)
 	row := users.db.QueryRow(request)
@@ -705,7 +898,7 @@ func (users *Users) getUserInDB(emailToCheck string) (*sdu.User, error) {
 
 func (users *Users) isUserExistsInDB(emailToCheck string) (bool, error) {
 
-	var existingUser sdu.User
+	var existingUser User
 
 	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", emailToCheck)
 	row := users.db.QueryRow(request)
@@ -730,7 +923,7 @@ func (users *Users) isUserExistsInDB(emailToCheck string) (bool, error) {
 
 func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 
-	var userToCheck, existingUser sdu.User
+	var userToCheck, existingUser User
 
 	json.NewDecoder(req.Body).Decode(&userToCheck)
 	fmt.Println("[addUser] ", req.Body)
@@ -755,19 +948,19 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 
 			if _, err := users.db.Query(insertUserCmd); err != nil {
 				fmt.Println("[addUser] Error inserting user: ", err)
-				httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
+				httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
 			fmt.Println("[addUser] user added: ", insertUserCmd)
-			httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "OK"}}
+			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "OK"}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 	} else {
 		// user exists => cannot add
 		fmt.Println("[addUser] user exists: ", existingUser.Email)
-		httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Email déjà utilisé"}}
+		httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Email déjà utilisé"}}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
@@ -776,7 +969,7 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Println("[authenticateUser]")
-	var userToCheck sdu.User
+	var userToCheck User
 
 	json.NewDecoder(req.Body).Decode(&userToCheck)
 
@@ -796,7 +989,7 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 		if err != nil {
 			// error happened => send http error, authentication fail
 			fmt.Println("[authenticateUser] There was an error when parsing token ", err.Error())
-			httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
+			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 			json.NewEncoder(w).Encode(httpResponse)
 		}
 
@@ -805,24 +998,24 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 			isUserExist, err := users.isUserExistsInDB(userToCheck.Email)
 			if err != nil {
 				fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.Email, err.Error())
-				httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
+				httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
 			if isUserExist {
 				// token valid => send http ok with token
 				fmt.Println("[authenticateUser] user exists, used existing token : ", token)
-				httpResponse := sdu.AuthenticationHTTPResponse{
-					ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK},
-					AuthData:        sdu.AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: token.Raw}}
+				httpResponse := AuthenticationHTTPResponse{
+					ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK},
+					AuthData:        AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: token.Raw}}
 
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			} else {
 				// user does not exists
 				fmt.Println("[authenticateUser] user does not exist, need to create user account")
-				httpResponse := sdu.AuthenticationHTTPResponse{
-					ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusUnauthorized, ResponseMessage: "l'email n'est pas connu, veillez vérifier l'email utilisé"}}
+				httpResponse := AuthenticationHTTPResponse{
+					ResponseDetails: HTTPResponse{ResponseCode: http.StatusUnauthorized, ResponseMessage: "l'email n'est pas connu, veillez vérifier l'email utilisé"}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
@@ -837,7 +1030,7 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 		isUserExist, err := users.isUserExistsInDB(userToCheck.Email)
 		if err != nil {
 			fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.Email, err.Error())
-			httpResponse := sdu.AuthenticationHTTPResponse{ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
+			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
@@ -848,34 +1041,34 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 
 			if err != nil {
 				fmt.Println("[authenticateUser] password non corresponding")
-				httpResponse := sdu.AuthenticationHTTPResponse{
-					ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "NOK"}}
+				httpResponse := AuthenticationHTTPResponse{
+					ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "NOK"}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
 			fmt.Println("[authenticateUser] password corresponding")
 			// if user exists in DB => generate JWT
-			newToken, err := sdu.GenerateJWT()
+			newToken, err := GenerateJWT()
 			if err != nil {
 				fmt.Println("[authenticateUser] error generating JWT: ", err.Error())
-				httpResponse := sdu.AuthenticationHTTPResponse{
-					ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: "Erreur lors de la génération du token"}}
+				httpResponse := AuthenticationHTTPResponse{
+					ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: "Erreur lors de la génération du token"}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
 
 			fmt.Println("[authenticateUser] user exists, generated token : ", newToken)
 
-			httpResponse := sdu.AuthenticationHTTPResponse{
-				ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"},
-				AuthData:        sdu.AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: newToken}}
+			httpResponse := AuthenticationHTTPResponse{
+				ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"},
+				AuthData:        AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: newToken}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		} else {
 			// user does not exist => http NOK authentication failed, please create account
 			fmt.Println("[authenticateUser] user does not exist, need to create user account: ", userToCheck.Email)
-			httpResponse := sdu.AuthenticationHTTPResponse{
-				ResponseDetails: sdu.HTTPResponse{ResponseCode: http.StatusUnauthorized, ResponseMessage: "l'email n'est pas connu, veillez vérifier l'email utilisé"}}
+			httpResponse := AuthenticationHTTPResponse{
+				ResponseDetails: HTTPResponse{ResponseCode: http.StatusUnauthorized, ResponseMessage: "l'email n'est pas connu, veillez vérifier l'email utilisé"}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
