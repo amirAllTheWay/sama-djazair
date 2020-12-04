@@ -59,9 +59,6 @@ func GenerateSQLRequest(tableName string, parameters []string, r *http.Request) 
 
 	for _, paramName := range parameters {
 		paramValue := r.URL.Query()[paramName]
-		fmt.Println("------- paramName: ", paramName)
-		fmt.Println("------- paramValue: ", paramValue)
-
 		if paramValue != nil {
 			paramsMap[paramName] = paramValue[0]
 		}
@@ -108,7 +105,7 @@ type TourismOffer struct {
 	AgencyAddress    string `json:"agencyAddress"`
 	AgencyPhone      string `json:"agencyPhone"`
 	OfferReference   string `json:"offerReference"`
-	AgencyLogo       string `json:"agencyLogo"`
+	AgencyLogo       string `json:"agencyLogo,omitempty"`
 	HotelId   		 string `json:"hotelId"`
 	HotelPhotos   	[]string `json:"hotelPhotos"`
 }
@@ -172,10 +169,19 @@ type PreorderHTTPResponse struct {
 }
 
 
+type AuthenticationUser struct {
+	UserName 	string `json:"userName"`
+	Password 	string `json:"password"`
+}
+
 type User struct {
-	Username string `json:username`
-	Email    string `json:email`
-	Password string `json:password`
+	Id       	string `json:"id"`
+	UserName 	string `json:"userName"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
+	Password 	string `json:"-"`
+	Role    	string `json:"role"`
+	Token    	string `json:"token"`
 }
 
 // HTTPResponse represents generic http response
@@ -187,12 +193,11 @@ type HTTPResponse struct {
 
 type AuthenticationData struct {
 	Username string `json:"username"`
-	Email    string `json:"email"`
 	Token    string `json:"token"`
 }
 
 type AuthenticationHTTPResponse struct {
-	AuthData        AuthenticationData `json:"authData"`
+	User        User `json:"user"`
 	ResponseDetails HTTPResponse       `json:"httpResponse"`
 }
 
@@ -226,16 +231,11 @@ const (
 
 func (users *Users) tourismOffers(w http.ResponseWriter, req *http.Request) {
 
-    fmt.Println("get All tourismOffers: ", req)
     paramArray := []string{"departureCity", "destinationCity", "offerReference", "isHotOffer"}
 
-	//destinationCity,_ := req.URL.Query()["destinationCity"]
-
-	//getOfferByCityReq := fmt.Sprintf("SELECT * FROM TOURISM_OFFERS WHERE destinationCity LIKE '%s';", destinationCity[0])
 	getOfferByCityReq := GenerateSQLRequest("TOURISM_OFFERS", paramArray, req)
 	fmt.Println("********** get All tourismOffers: ", getOfferByCityReq)
 
-	fmt.Println("------- get All tourismOffers getOfferByCityReq: ", getOfferByCityReq)
     rows, err := users.db.Query(getOfferByCityReq)
     if err != nil {
         fmt.Println("Error getting offer: 1 ", err)
@@ -862,7 +862,7 @@ func (users *Users) addAgencyLogo(w http.ResponseWriter, req *http.Request) {
 	fmt.Println("[addUser] ", req.Body)
 	// check if user email exists
 
-	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", userToCheck.Email)
+	request := fmt.Sprintf("SELECT * FROM USERS WHERE username LIKE '%s';", userToCheck.Email)
 	row := users.db.QueryRow(request)
 
 	fmt.Println("[addUser] 1: ", request)
@@ -875,14 +875,14 @@ func (users *Users) addAgencyLogo(w http.ResponseWriter, req *http.Request) {
 	return
 }
 */
-func (users *Users) getUserInDB(emailToCheck string) (*User, error) {
+func (users *Users) getUserInDB(userName string) (*User, error) {
 
 	var existingUser User
 
-	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", emailToCheck)
+	request := fmt.Sprintf("SELECT * FROM USERS WHERE userName LIKE '%s';", userName)
 	row := users.db.QueryRow(request)
 
-	err := row.Scan(&existingUser.Username, &existingUser.Email, &existingUser.Password)
+	err := row.Scan(&existingUser.Id, &existingUser.UserName, &existingUser.Password, &existingUser.FirstName, &existingUser.LastName, &existingUser.Role)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -896,14 +896,36 @@ func (users *Users) getUserInDB(emailToCheck string) (*User, error) {
 	return &existingUser, nil
 }
 
-func (users *Users) isUserExistsInDB(emailToCheck string) (bool, error) {
+func (users *Users) getUserInDBById(id string) (*User, error) {
 
 	var existingUser User
 
-	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", emailToCheck)
+	request := fmt.Sprintf("SELECT * FROM USERS WHERE id = '%s';", id)
 	row := users.db.QueryRow(request)
 
-	err := row.Scan(&existingUser.Username, &existingUser.Email, &existingUser.Password)
+	err := row.Scan(&existingUser.Id, &existingUser.UserName, &existingUser.Password, &existingUser.FirstName, &existingUser.LastName, &existingUser.Role)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			fmt.Println("[getUserInDBById] user does not exist")
+			return nil, nil
+		}
+		fmt.Println("[getUserInDBById] Error on user scan: ", err)
+		return nil, err
+	}
+
+	return &existingUser, nil
+}
+
+func (users *Users) isUserExistsInDB(userName string) (bool, error) {
+
+	var existingUser User
+
+	request := fmt.Sprintf("SELECT * FROM USERS WHERE username LIKE '%s';", userName)
+	fmt.Println("[isUserExistsInDB] request", request)
+	row := users.db.QueryRow(request)
+
+	err := row.Scan(&existingUser.Id, &existingUser.UserName, &existingUser.Password, &existingUser.FirstName, &existingUser.LastName, &existingUser.Role)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -914,7 +936,7 @@ func (users *Users) isUserExistsInDB(emailToCheck string) (bool, error) {
 		return false, err
 	}
 
-	if existingUser.Email == emailToCheck {
+	if existingUser.UserName == userName {
 		return true, nil
 	} else {
 		return false, nil
@@ -925,26 +947,29 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 
 	var userToCheck, existingUser User
 
-	json.NewDecoder(req.Body).Decode(&userToCheck)
-	fmt.Println("[addUser] ", req.Body)
+	decoder := json.NewDecoder(req.Body)
+	err := decoder.Decode(&userToCheck)
+	if err != nil {
+		panic(err)
+	}
+
 	// check if user email exists
 
-	request := fmt.Sprintf("SELECT * FROM USERS WHERE email LIKE '%s';", userToCheck.Email)
+	request := fmt.Sprintf("SELECT * FROM USERS WHERE userName LIKE '%s';", userToCheck.UserName)
 	row := users.db.QueryRow(request)
 
-	fmt.Println("[addUser] 1: ", request)
-	err := row.Scan(&existingUser.Username, &existingUser.Email, &existingUser.Password)
+	err = row.Scan(&existingUser.Id, &existingUser.UserName, &existingUser.Password, &existingUser.FirstName, &existingUser.LastName, &existingUser.Role)
 
 	if err != nil {
-		fmt.Printf("[addUser] 2 %q", err)
 		if err == sql.ErrNoRows {
 			// email not used, new user => hash password
-			hashPwd, _ := bcrypt.GenerateFromPassword([]byte(userToCheck.Password), 10)
+			hashPwd, _ := bcrypt.GenerateFromPassword([]byte(userToCheck.Password), bcrypt.MinCost)
 
-			fmt.Printf("[addUser] 3")
 			// no user exists with that email => can add user
-			insertUserCmd := fmt.Sprintf("INSERT INTO USERS (username, email, password) VALUES ('%s','%s','%s');",
-				userToCheck.Username, userToCheck.Email, hashPwd)
+			userId := guuid.New();
+			insertUserCmd := fmt.Sprintf("INSERT INTO USERS (id, username, firstName, lastName, password, role) " +
+				"VALUES ('%s','%s','%s','%s','%s','%s');",
+				userId, userToCheck.UserName, userToCheck.FirstName, userToCheck.LastName, string(hashPwd), userToCheck.Role)
 
 			if _, err := users.db.Query(insertUserCmd); err != nil {
 				fmt.Println("[addUser] Error inserting user: ", err)
@@ -952,15 +977,13 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
-			fmt.Println("[addUser] user added: ", insertUserCmd)
-			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "OK"}}
+			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusCreated, ResponseMessage: "OK", Id: userId.String()}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 	} else {
 		// user exists => cannot add
-		fmt.Println("[addUser] user exists: ", existingUser.Email)
-		httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Email déjà utilisé"}}
+		httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusNoContent, ResponseMessage: "Nom utilisateur déjà utilisé"}}
 		json.NewEncoder(w).Encode(httpResponse)
 		return
 	}
@@ -969,7 +992,8 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 
 	fmt.Println("[authenticateUser]")
-	var userToCheck User
+
+	var userToCheck AuthenticationUser
 
 	json.NewDecoder(req.Body).Decode(&userToCheck)
 
@@ -995,19 +1019,21 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 
 		if token.Valid {
 			// check that user exists in DB
-			isUserExist, err := users.isUserExistsInDB(userToCheck.Email)
+			isUserExist, err := users.isUserExistsInDB(userToCheck.UserName)
 			if err != nil {
-				fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.Email, err.Error())
+				fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.UserName, err.Error())
 				httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 				json.NewEncoder(w).Encode(httpResponse)
 				return
 			}
 			if isUserExist {
 				// token valid => send http ok with token
+				userDB, _ := users.getUserInDB(userToCheck.UserName)
+				userDB.Token = token.Raw
 				fmt.Println("[authenticateUser] user exists, used existing token : ", token)
 				httpResponse := AuthenticationHTTPResponse{
-					ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK},
-					AuthData:        AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: token.Raw}}
+					ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK", Id: userDB.Id},
+					User:        *userDB}
 
 				json.NewEncoder(w).Encode(httpResponse)
 				return
@@ -1025,18 +1051,19 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 	} else {
 		// No Token is request
 		// check that user exists
-		fmt.Println("[authenticateUser] request without token header :", userToCheck.Email)
+		fmt.Println("[authenticateUser] request without token header :", userToCheck)
 
-		isUserExist, err := users.isUserExistsInDB(userToCheck.Email)
+		isUserExist, err := users.isUserExistsInDB(userToCheck.UserName)
+
 		if err != nil {
-			fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.Email, err.Error())
+			fmt.Println("[authenticateUser] error while checking user:  existence: ", userToCheck.UserName, err.Error())
 			httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		}
 		if isUserExist {
 			// check that password corresponds
-			userDB, err := users.getUserInDB(userToCheck.Email)
+			userDB, err := users.getUserInDB(userToCheck.UserName)
 			err = bcrypt.CompareHashAndPassword([]byte(userDB.Password), []byte(userToCheck.Password))
 
 			if err != nil {
@@ -1057,16 +1084,15 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 				return
 			}
 
-			fmt.Println("[authenticateUser] user exists, generated token : ", newToken)
-
+			userDB.Token = newToken
 			httpResponse := AuthenticationHTTPResponse{
-				ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK"},
-				AuthData:        AuthenticationData{Username: userToCheck.Username, Email: userToCheck.Email, Token: newToken}}
+				ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "OK", Id: userDB.Id},
+				User:        *userDB}
 			json.NewEncoder(w).Encode(httpResponse)
 			return
 		} else {
 			// user does not exist => http NOK authentication failed, please create account
-			fmt.Println("[authenticateUser] user does not exist, need to create user account: ", userToCheck.Email)
+			fmt.Println("[authenticateUser] user does not exist, need to create user account: ", userToCheck.UserName)
 			httpResponse := AuthenticationHTTPResponse{
 				ResponseDetails: HTTPResponse{ResponseCode: http.StatusUnauthorized, ResponseMessage: "l'email n'est pas connu, veillez vérifier l'email utilisé"}}
 			json.NewEncoder(w).Encode(httpResponse)
@@ -1077,8 +1103,23 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 	}
 }
 
-func homePage(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Homepage Endpoint hit")
+func (users *Users) getUserById(w http.ResponseWriter, req *http.Request) {
+
+	fmt.Println("[getUserById]")
+
+	userID := URLParamAsString("id", req)
+
+	userDB, err := users.getUserInDBById(*userID)
+
+	if err !=nil {
+		fmt.Println("[getUserById] error happened: ", err.Error())
+		httpResponse := AuthenticationHTTPResponse{
+			ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
+		json.NewEncoder(w).Encode(httpResponse)
+		return
+	}
+
+	json.NewEncoder(w).Encode(userDB)
 }
 
 func handleRequests() {
@@ -1118,7 +1159,7 @@ func handleRequests() {
 
 	r := mux.NewRouter()
 	r.HandleFunc("/tourismOffers", users.tourismOffers).Methods("GET")
-	r.HandleFunc("/addTourismOffer", users.addTourismOffer)
+	r.HandleFunc("/tourismOffers", users.addTourismOffer).Methods(http.MethodPost)
 	r.HandleFunc("/addOmraOffer", users.addOmraOffer)
 	r.HandleFunc("/offers/offerByName/{companyName}", users.getOfferByCompanyName).Methods("GET")
 	//r.HandleFunc("/offers/departureCity/{departureCity}/destinationCity/{destinationCity}/departureDate/{departureDate}/returnDate/{returnDate}", users.getOfferByCity).Methods("GET")
@@ -1134,10 +1175,17 @@ func handleRequests() {
 
 	// User management
 	r.HandleFunc("/addUser", users.addUser).Methods("POST")
-	r.HandleFunc("/authenticate", users.authenticateUser).Methods("POST")
+	r.HandleFunc("/authenticate", users.authenticateUser).Methods(http.MethodPost, http.MethodOptions)
+	r.HandleFunc("/users/{id}", users.getUserById).Methods("GET")
 
 	//log.Fatal(http.ListenAndServeTLS(":8000", "./certifs/public.cert", "./certifs/private.key", r))
-	log.Fatal(http.ListenAndServe(":"+port, handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(r)))
+	//log.Fatal(http.ListenAndServe(":"+port, handlers.CORS(handlers.AllowedOrigins([]string{"*"}))(r)))
+	headers :=  handlers.AllowedHeaders([]string{"X-Requested-With", "Content-Type", "Authorization", "Origin", "Accept", "token"})
+	methods :=  handlers.AllowedMethods([]string{"GET", "POST","OPTIONS"})
+	origins := 	handlers.AllowedOrigins([]string{"*"})
+
+
+	log.Fatal(http.ListenAndServe(":"+port, handlers.CORS(headers, methods, origins)(r)))
 
 }
 
