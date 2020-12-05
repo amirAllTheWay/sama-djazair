@@ -129,7 +129,7 @@ type OmraOffer struct {
 	IsHotOffer        bool   `json:"isHotOffer"`
 	AgencyAddress     string `json:"agencyAddress"`
 	AgencyPhone       string `json:"agencyPhone"`
-	AgencyLogo        string `json:"agencyLogo"`
+	AgencyLogo        string `json:"-"`
 }
 
 // Hotel represent a Hotel
@@ -402,13 +402,13 @@ func (users *Users) addTourismOffer(w http.ResponseWriter, req *http.Request) {
 	insertOfferCmd := fmt.Sprintf("INSERT INTO TOURISM_OFFERS "+
 		"(offerTitle, flyingCompany, departureCity, destinationcity, departureDate, returnDate, hotelName, offerPrice," +
 		"offerDescription, travelAgency, agencyEmail, travelDuration, hotelStars, isHotOffer, agencyAddress," +
-		" agencyPhone, offerReference, hotelId) VALUES "+
-		"('%s', '%s','%s','%s','%s','%s','%s','%s' ,'%s','%s','%s','%d','%d','%t','%s','%s','%s','%s');",
+		" agencyPhone, offerReference, hotelId, agencyLogo) VALUES "+
+		"('%s', '%s','%s','%s','%s','%s','%s','%s' ,'%s','%s','%s','%d','%d','%t','%s','%s','%s','%s','%s');",
 		tourismOffer.OfferTitle, tourismOffer.FlyingCompany, tourismOffer.DepartureCity, tourismOffer.DestinationCity,
 		tourismOffer.DepartureDate, tourismOffer.ReturnDate, tourismOffer.HotelName, tourismOffer.OfferPrice, tourismOffer.OfferDescription,
 		tourismOffer.TravelAgency, tourismOffer.AgencyEmail, tourismOffer.TravelDuration,
 		tourismOffer.HotelStars, tourismOffer.IsHotOffer, tourismOffer.AgencyAddress, tourismOffer.AgencyPhone, tourismOffer.OfferReference,
-		tourismOffer.HotelId)
+		tourismOffer.HotelId, "s")
 
 	if _, err := users.db.Query(insertOfferCmd); err != nil {
 		fmt.Println("Error inserting offer: %q", err)
