@@ -179,7 +179,7 @@ type User struct {
 	UserName 	string `json:"userName"`
 	FirstName   string `json:"firstName"`
 	LastName    string `json:"lastName"`
-	Password 	string `json:"-"`
+	Password 	string `json:"password,-"`
 	Role    	string `json:"role"`
 	Token    	string `json:"token"`
 }
@@ -963,14 +963,13 @@ func (users *Users) addUser(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// email not used, new user => hash password
-			hashPwd, _ := bcrypt.GenerateFromPassword([]byte(userToCheck.Password), bcrypt.MinCost)
+			//hashPwd, _ := bcrypt.GenerateFromPassword([]byte(userToCheck.Password), bcrypt.MinCost)
 
 			// no user exists with that email => can add user
-			userId := guuid.New();
+			userId := guuid.New()
 			insertUserCmd := fmt.Sprintf("INSERT INTO USERS (id, username, firstName, lastName, password, role) " +
 				"VALUES ('%s','%s','%s','%s','%s','%s');",
-				userId, userToCheck.UserName, userToCheck.FirstName, userToCheck.LastName, string(hashPwd), userToCheck.Role)
-
+				userId, userToCheck.UserName, userToCheck.FirstName, userToCheck.LastName, userToCheck.Password, userToCheck.Role)
 			if _, err := users.db.Query(insertUserCmd); err != nil {
 				fmt.Println("[addUser] Error inserting user: ", err)
 				httpResponse := AuthenticationHTTPResponse{ResponseDetails: HTTPResponse{ResponseCode: http.StatusInternalServerError, ResponseMessage: err.Error()}}
@@ -1062,11 +1061,11 @@ func (users *Users) authenticateUser(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		if isUserExist {
-			// check that password corresponds
 			userDB, err := users.getUserInDB(userToCheck.UserName)
+			// check that password corresponds
 			err = bcrypt.CompareHashAndPassword([]byte(userDB.Password), []byte(userToCheck.Password))
 
-			if err != nil {
+			if userDB.Password != userToCheck.Password {
 				fmt.Println("[authenticateUser] password non corresponding")
 				httpResponse := AuthenticationHTTPResponse{
 					ResponseDetails: HTTPResponse{ResponseCode: http.StatusOK, ResponseMessage: "NOK"}}
