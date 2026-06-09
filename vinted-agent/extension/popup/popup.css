@@ -1,0 +1,230 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #222;
+  background: #f5f7fa;
+  min-width: 320px;
+}
+
+.popup {
+  width: 320px;
+}
+
+/* Header */
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #1d6fa4, #09c);
+  color: #fff;
+}
+
+.popup-logo {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.popup-version {
+  font-size: 11px;
+  opacity: 0.75;
+}
+
+/* Sections */
+.section {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e6eaf0;
+  background: #fff;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1d6fa4;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f0f4fa;
+  margin-bottom: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ccc;
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.status-dot.active   { background: #2ecc71; }
+.status-dot.inactive { background: #e74c3c; }
+.status-dot.checking { background: #f39c12; animation: pulse 1s infinite; }
+
+@keyframes pulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+/* Fields */
+.field {
+  margin-bottom: 12px;
+}
+
+.field:last-child { margin-bottom: 0; }
+
+.field label {
+  display: block;
+  font-weight: 600;
+  color: #444;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-top: 3px;
+  font-weight: 400;
+}
+
+input[type="password"],
+input[type="text"],
+select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid #d0d8e4;
+  border-radius: 7px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #222;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+input:focus, select:focus { border-color: #09c; }
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.input-row input { flex: 1; }
+
+.range-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+input[type="range"] {
+  flex: 1;
+  accent-color: #09c;
+  border: none;
+  padding: 0;
+}
+
+/* Toggle */
+.field--toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.field--toggle label:first-child { margin-bottom: 0; }
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 22px;
+  flex-shrink: 0;
+}
+
+.toggle input { opacity: 0; width: 0; height: 0; }
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #ccc;
+  border-radius: 22px;
+  transition: background 0.2s;
+}
+
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle input:checked + .toggle-slider { background: #09c; }
+.toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
+
+/* Buttons */
+.btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: filter 0.15s;
+}
+
+.btn:hover { filter: brightness(0.92); }
+.btn:active { filter: brightness(0.85); }
+
+.btn-primary { background: #1d6fa4; color: #fff; }
+.btn-sm { padding: 8px 12px; font-size: 12px; }
+.btn-full { width: 100%; margin-top: 14px; }
+
+.save-msg {
+  text-align: center;
+  font-size: 12px;
+  color: #2ecc71;
+  margin-top: 8px;
+  min-height: 16px;
+  font-weight: 600;
+}
+
+/* Footer */
+.popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px;
+  font-size: 11px;
+  color: #aaa;
+  background: #f5f7fa;
+}
+
+.popup-footer a {
+  color: #1d6fa4;
+  text-decoration: none;
+}
+
+.popup-footer a:hover { text-decoration: underline; }

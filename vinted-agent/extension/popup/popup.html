@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VintBot</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="popup">
+    <header class="popup-header">
+      <span class="popup-logo">🤖 VintBot</span>
+      <span class="popup-version">v1.0</span>
+    </header>
+
+    <!-- License section -->
+    <section class="section" id="license-section">
+      <div class="status-bar" id="status-bar">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Vérification…</span>
+      </div>
+      <div class="field">
+        <label for="license-key">Clé de licence</label>
+        <div class="input-row">
+          <input type="password" id="license-key" placeholder="VINTB-XXXX-XXXX-XXXX" autocomplete="off" />
+          <button id="validate-btn" class="btn btn-primary btn-sm">OK</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings section -->
+    <section class="section" id="settings-section">
+      <h2 class="section-title">Paramètres de négociation</h2>
+
+      <div class="field">
+        <label for="min-price-ratio">Prix minimum accepté (% du prix affiché)</label>
+        <div class="range-row">
+          <input type="range" id="min-price-ratio" min="50" max="100" step="5" value="80" />
+          <span id="min-price-label">80%</span>
+        </div>
+        <p class="field-hint">En dessous de ce seuil, VintBot refusera poliment.</p>
+      </div>
+
+      <div class="field">
+        <label for="style">Style de négociation</label>
+        <select id="style">
+          <option value="friendly">😊 Amical et chaleureux</option>
+          <option value="firm">💼 Ferme et professionnel</option>
+          <option value="playful">😄 Décontracté et sympa</option>
+          <option value="formal">🎩 Formel et courtois</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="language">Langue de réponse</label>
+        <select id="language">
+          <option value="fr">🇫🇷 Français</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="es">🇪🇸 Español</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="nl">🇳🇱 Nederlands</option>
+        </select>
+      </div>
+
+      <div class="field field--toggle">
+        <label for="auto-send">
+          <span>Envoi automatique</span>
+          <span class="field-hint">Sans confirmation de ta part</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="auto-send" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="field field--toggle">
+        <label for="active">
+          <span>Agent actif</span>
+          <span class="field-hint">Active/désactive VintBot globalement</span>
+        </label>
+        <label class="toggle">
+          <input type="checkbox" id="active" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <button id="save-btn" class="btn btn-primary btn-full">Sauvegarder</button>
+      <p id="save-msg" class="save-msg"></p>
+    </section>
+
+    <footer class="popup-footer">
+      <a href="https://vintbot.io/support" target="_blank">Support</a>
+      <span>·</span>
+      <a href="https://vintbot.io/docs" target="_blank">Docs</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
