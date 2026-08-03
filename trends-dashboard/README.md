@@ -50,6 +50,35 @@ npm run fetch:once
 
 Ouvre `http://localhost:3000` et clique sur **Actualiser**.
 
+### Pourquoi le local marche souvent mieux qu'un hébergeur
+
+Google traite très différemment une IP résidentielle (ta box) et une IP de
+datacenter (Render, Railway, Fly.io…). Les IPs d'hébergeurs sont connues et
+agressivement limitées : c'est la cause typique des `403` (requête refusée) et
+`429` (débit limité). Si la collecte échoue en ligne mais fonctionne sur ta
+machine, le code n'est pas en cause — c'est l'IP d'origine.
+
+## Diagnostiquer un échec
+
+Deux façons de voir ce que Google renvoie réellement, sans deviner :
+
+```bash
+npm run diagnose   # affiche, étape par étape, statut HTTP + début du corps de réponse
+```
+
+ou, serveur lancé, ouvrir `http://localhost:3000/api/diagnostics` (également
+accessible via le lien « Voir le diagnostic brut » sous le bouton Actualiser).
+
+Lecture des statuts :
+
+| Statut | Signification |
+|---|---|
+| `200` + JSON | tout va bien |
+| `400` | requête malformée — bug de code, pas un blocage |
+| `403` | Google refuse cette IP (typiquement une IP de datacenter) |
+| `429` | débit limité — attendre avant de réessayer |
+| `200` + HTML | page de consentement ou de blocage anti-bot |
+
 ## Déployer en un clic sur Render
 
 Un fichier `render.yaml` à la racine du repo décrit le service (build +
