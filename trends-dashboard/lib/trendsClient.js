@@ -131,10 +131,10 @@ function parseJsonResponse(body, stepName) {
 // One "explore" call returns tokens for every widget (timeseries, related
 // queries, etc.) for a given keyword + time range — mirrors what a single
 // visit to the Trends explore page does, instead of one explore per widget.
-async function explore({ keyword, geo, hl, time }) {
+async function explore({ keyword, geo, hl, time, category = 0 }) {
   const req = JSON.stringify({
     comparisonItem: [{ keyword, geo, time }],
-    category: 0,
+    category,
     property: '',
   });
 
@@ -191,9 +191,9 @@ module.exports = {
   // Exposed for the diagnostics endpoint, which needs the untouched
   // status/headers/body rather than a parsed result or a thrown error.
   rawGet: get,
-  buildExploreQuery: ({ keyword, geo, hl, time }) => ({
+  buildExploreQuery: ({ keyword, geo, hl, time, category = 0 }) => ({
     hl,
     tz: 0,
-    req: JSON.stringify({ comparisonItem: [{ keyword, geo, time }], category: 0, property: '' }),
+    req: JSON.stringify({ comparisonItem: [{ keyword, geo, time }], category, property: '' }),
   }),
 };

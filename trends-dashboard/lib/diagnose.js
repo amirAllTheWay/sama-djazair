@@ -1,8 +1,10 @@
 const trendsClient = require('./trendsClient');
 const { loadStars } = require('./store');
-const { TIMESERIES_RANGE, RELATED_QUERIES_RANGE } = require('./fetchTrends');
+const { TIMESERIES_RANGE, RELATED_QUERIES_RANGE, DEFAULT_GEO, DEFAULT_HL } = require('./fetchTrends');
 
 const BODY_PREVIEW_CHARS = 700;
+const GEO = DEFAULT_GEO;
+const HL = DEFAULT_HL;
 
 function classify(statusCode, body) {
   const trimmed = (body || '').trim();
@@ -47,8 +49,8 @@ async function diagnose() {
   for (const probe of probes) {
     const qs = trendsClient.buildExploreQuery({
       keyword: star.keyword,
-      geo: '',
-      hl: 'fr',
+      geo: GEO,
+      hl: HL,
       time: probe.time,
     });
 
@@ -94,7 +96,7 @@ async function diagnose() {
 
     try {
       const res = await trendsClient.rawGet(probe.path, {
-        hl: 'fr',
+        hl: HL,
         tz: 0,
         req: JSON.stringify(widget.request),
         token: widget.token,

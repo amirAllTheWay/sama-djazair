@@ -1,8 +1,11 @@
 const trendsClient = require('./trendsClient');
 const { isFashionQuery } = require('./fashionVocabulary');
 
-const DEFAULT_GEO = '';
-const DEFAULT_HL = 'fr';
+// The board tracks the US market: geo scopes results to searches made there,
+// and en-US matches the language those searchers actually type, which is what
+// the returned query strings are made of. Override per star via `geo`.
+const DEFAULT_GEO = 'US';
+const DEFAULT_HL = 'en-US';
 const BETWEEN_CALLS_DELAY_MS = 2000;
 const RETRY_DELAY_MS = 8000;
 
@@ -33,8 +36,10 @@ async function withOneRetry(fn) {
   }
 }
 
-async function fetchWidgetForRange(keyword, widgetId, time, { geo, hl }) {
-  const widgets = await withOneRetry(() => trendsClient.explore({ keyword, geo, hl, time }));
+async function fetchWidgetForRange(keyword, widgetId, time, { geo, hl, category = 0 }) {
+  const widgets = await withOneRetry(() =>
+    trendsClient.explore({ keyword, geo, hl, time, category })
+  );
   return withOneRetry(() => trendsClient.fetchWidget(widgetId, widgets, { hl }));
 }
 
@@ -61,12 +66,13 @@ function mergeQueries(existing, incoming, seed) {
 }
 
 async function fetchStarTrends(star, opts = {}) {
-  const geo = opts.geo ?? DEFAULT_GEO;
-  const hl = opts.hl ?? DEFAULT_HL;
+  const geo = star.geo ?? opts.geo ?? DEFAULT_GEO;
+  const hl = star.hl ?? opts.hl ?? DEFAULT_HL;
 
   const result = {
     slug: star.slug,
     keyword: star.keyword,
+    geo,
     fetchedAt: new Date().toISOString(),
     interestOverTime: [],
     relatedQueries: { top: [], rising: [] },
@@ -94,11 +100,31 @@ async function fetchStarTrends(star, opts = {}) {
   }
 
   // Searching the name alone mostly surfaces age, films and dating rumours.
-  // Two things narrow it to what people ask about the clothes: the fashion
-  // slice of the broad results, and dedicated lookups on outfit/style terms.
+  // Three things narrow it to what people ask about the clothes: a category
+  // filter (by far the most effective when the right id is known — see
+  // `npm run find-category`), the fashion slice of the broad results, and
+  // dedicated lookups on outfit/style terms.
   const fashion = { top: [], rising: [] };
+
+  if (star.category) {
+    await sleep(BETWEEN_CALLS_DELAY_MS);
+    try {
+      const data = await fetchWidgetForRange(star.keyword, 'RELATED_QUERIES', RELATED_QUERIES_RANGE, {
+        geo,
+        hl,
+        category: star.category,
+      });
+      const categoryQueries = trendsClient.toRelatedQueries(data);
+      fashion.top = categoryQueries.top;
+      fashion.rising = categoryQueries.rising;
+    } catch (err) {
+      result.errors[`category:${star.category}`] = err.message || String(err);
+    }
+  }
+
   for (const bucket of ['top', 'rising']) {
-    fashion[bucket] = result.relatedQueries[bucket].filter((item) => isFashionQuery(item.query));
+    const filtered = result.relatedQueries[bucket].filter((item) => isFashionQuery(item.query));
+    fashion[bucket] = mergeQueries(fashion[bucket], filtered, star.keyword);
   }
 
   const seeds = star.fashionSeeds || defaultFashionSeeds(star.keyword);
@@ -123,4 +149,10 @@ async function fetchStarTrends(star, opts = {}) {
   return result;
 }
 
-module.exports = { fetchStarTrends, TIMESERIES_RANGE, RELATED_QUERIES_RANGE };
+module.exports = {
+  fetchStarTrends,
+  TIMESERIES_RANGE,
+  RELATED_QUERIES_RANGE,
+  DEFAULT_GEO,
+  DEFAULT_HL,
+};

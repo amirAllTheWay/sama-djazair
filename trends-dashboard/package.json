@@ -10,7 +10,8 @@
     "start": "node server.js",
     "dev": "node scripts/dev.js",
     "fetch:once": "node scripts/fetch-once.js",
-    "diagnose": "node scripts/diagnose.js"
+    "diagnose": "node scripts/diagnose.js",
+    "find-category": "node scripts/find-category.js"
   },
   "dependencies": {
     "express": "^4.19.2"
