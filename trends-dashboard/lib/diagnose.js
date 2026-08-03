@@ -1,5 +1,6 @@
 const trendsClient = require('./trendsClient');
 const { loadStars } = require('./store');
+const { TIMESERIES_RANGE, RELATED_QUERIES_RANGE } = require('./fetchTrends');
 
 const BODY_PREVIEW_CHARS = 700;
 
@@ -32,61 +33,74 @@ async function diagnose() {
   await trendsClient.warmUp();
   report.sessionCookies = trendsClient.cookieNames();
 
-  const qs = trendsClient.buildExploreQuery({ keyword: star.keyword, geo: '', hl: 'fr', time: 'now 7-d' });
+  // Each widget is probed at the range the app actually requests it at —
+  // related queries come back empty on a short window regardless of status.
+  const probes = [
+    { widgetId: 'TIMESERIES', time: TIMESERIES_RANGE, path: '/trends/api/widgetdata/multiline' },
+    {
+      widgetId: 'RELATED_QUERIES',
+      time: RELATED_QUERIES_RANGE,
+      path: '/trends/api/widgetdata/relatedsearches',
+    },
+  ];
 
-  let exploreRes;
-  try {
-    exploreRes = await trendsClient.rawGet('/trends/api/explore', qs);
-  } catch (err) {
-    report.steps.push({ step: 'explore', networkError: err.message || String(err) });
-    return report;
-  }
+  for (const probe of probes) {
+    const qs = trendsClient.buildExploreQuery({
+      keyword: star.keyword,
+      geo: '',
+      hl: 'fr',
+      time: probe.time,
+    });
 
-  report.steps.push({
-    step: 'explore',
-    statusCode: exploreRes.statusCode,
-    interpretation: classify(exploreRes.statusCode, exploreRes.body),
-    contentType: exploreRes.headers['content-type'] || null,
-    setCookie: Boolean(exploreRes.headers['set-cookie']),
-    location: exploreRes.headers.location || null,
-    bodyLength: (exploreRes.body || '').length,
-    bodyPreview: (exploreRes.body || '').slice(0, BODY_PREVIEW_CHARS),
-  });
-
-  if (exploreRes.statusCode !== 200) return report;
-
-  let widgets;
-  try {
-    const parsed = JSON.parse(exploreRes.body.slice(exploreRes.body.indexOf('{')));
-    widgets = parsed.widgets || [];
-  } catch (err) {
-    report.steps.push({ step: 'parse-explore', parseError: err.message });
-    return report;
-  }
-
-  report.availableWidgetIds = widgets.map((w) => w.id);
-
-  for (const widgetId of ['TIMESERIES', 'RELATED_QUERIES']) {
-    const widget = widgets.find((w) => (w.id || '').indexOf(widgetId) > -1);
-    if (!widget) {
-      report.steps.push({ step: widgetId, missing: true, note: 'Widget absent de la réponse explore.' });
+    let exploreRes;
+    try {
+      exploreRes = await trendsClient.rawGet('/trends/api/explore', qs);
+    } catch (err) {
+      report.steps.push({ step: `explore (${probe.time})`, networkError: err.message || String(err) });
       continue;
     }
 
-    const path =
-      widgetId === 'TIMESERIES'
-        ? '/trends/api/widgetdata/multiline'
-        : '/trends/api/widgetdata/relatedsearches';
+    report.steps.push({
+      step: `explore (${probe.time})`,
+      statusCode: exploreRes.statusCode,
+      interpretation: classify(exploreRes.statusCode, exploreRes.body),
+      contentType: exploreRes.headers['content-type'] || null,
+      setCookie: Boolean(exploreRes.headers['set-cookie']),
+      location: exploreRes.headers.location || null,
+      bodyLength: (exploreRes.body || '').length,
+      bodyPreview: (exploreRes.body || '').slice(0, BODY_PREVIEW_CHARS),
+    });
+
+    if (exploreRes.statusCode !== 200) continue;
+
+    let widgets;
+    try {
+      const parsed = JSON.parse(exploreRes.body.slice(exploreRes.body.indexOf('{')));
+      widgets = parsed.widgets || [];
+    } catch (err) {
+      report.steps.push({ step: `parse-explore (${probe.time})`, parseError: err.message });
+      continue;
+    }
+
+    const widget = widgets.find((w) => (w.id || '').indexOf(probe.widgetId) > -1);
+    if (!widget) {
+      report.steps.push({
+        step: probe.widgetId,
+        missing: true,
+        note: 'Widget absent de la réponse explore.',
+      });
+      continue;
+    }
 
     try {
-      const res = await trendsClient.rawGet(path, {
+      const res = await trendsClient.rawGet(probe.path, {
         hl: 'fr',
         tz: 0,
         req: JSON.stringify(widget.request),
         token: widget.token,
       });
       report.steps.push({
-        step: widgetId,
+        step: `${probe.widgetId} (${probe.time})`,
         statusCode: res.statusCode,
         interpretation: classify(res.statusCode, res.body),
         contentType: res.headers['content-type'] || null,
@@ -94,7 +108,7 @@ async function diagnose() {
         bodyPreview: (res.body || '').slice(0, BODY_PREVIEW_CHARS),
       });
     } catch (err) {
-      report.steps.push({ step: widgetId, networkError: err.message || String(err) });
+      report.steps.push({ step: probe.widgetId, networkError: err.message || String(err) });
     }
   }
 

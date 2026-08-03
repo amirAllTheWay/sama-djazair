@@ -2,18 +2,21 @@ const trendsClient = require('./trendsClient');
 
 const DEFAULT_GEO = '';
 const DEFAULT_HL = 'fr';
-const WINDOW_DAYS = 7;
 const BETWEEN_CALLS_DELAY_MS = 2000;
 const RETRY_DELAY_MS = 8000;
 
+// Google Trends' range syntax: hour/day windows use "now N-d", month/year
+// windows use "today N-m" — mixing the two gets a flat HTTP 400.
+//
+// The two widgets need different windows. A 7-day window resolves hourly,
+// which is what makes the sparkline useful, but Google computes related
+// queries over long periods and returns empty lists for a window that short.
+// So each widget gets its own explore call at the range it actually works at.
+const TIMESERIES_RANGE = 'now 7-d';
+const RELATED_QUERIES_RANGE = 'today 12-m';
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// Google Trends' own explore/widget syntax: hour/day windows use "now",
-// month/year windows use "today" — mixing them up gets a flat HTTP 400.
-function timeRangeForDays(days) {
-  return `now ${days}-d`;
 }
 
 async function withOneRetry(fn) {
@@ -29,6 +32,11 @@ async function withOneRetry(fn) {
   }
 }
 
+async function fetchWidgetForRange(keyword, widgetId, time, { geo, hl }) {
+  const widgets = await withOneRetry(() => trendsClient.explore({ keyword, geo, hl, time }));
+  return withOneRetry(() => trendsClient.fetchWidget(widgetId, widgets, { hl }));
+}
+
 async function fetchStarTrends(star, opts = {}) {
   const geo = opts.geo ?? DEFAULT_GEO;
   const hl = opts.hl ?? DEFAULT_HL;
@@ -42,20 +50,8 @@ async function fetchStarTrends(star, opts = {}) {
     errors: {},
   };
 
-  let widgets = [];
   try {
-    widgets = await withOneRetry(() =>
-      trendsClient.explore({ keyword: star.keyword, geo, hl, time: timeRangeForDays(WINDOW_DAYS) })
-    );
-  } catch (err) {
-    const message = err.message || String(err);
-    result.errors.interestOverTime = message;
-    result.errors.relatedQueries = message;
-    return result;
-  }
-
-  try {
-    const data = await withOneRetry(() => trendsClient.fetchWidget('TIMESERIES', widgets, { hl }));
+    const data = await fetchWidgetForRange(star.keyword, 'TIMESERIES', TIMESERIES_RANGE, { geo, hl });
     result.interestOverTime = trendsClient.toInterestOverTime(data);
   } catch (err) {
     result.errors.interestOverTime = err.message || String(err);
@@ -64,7 +60,10 @@ async function fetchStarTrends(star, opts = {}) {
   await sleep(BETWEEN_CALLS_DELAY_MS);
 
   try {
-    const data = await withOneRetry(() => trendsClient.fetchWidget('RELATED_QUERIES', widgets, { hl }));
+    const data = await fetchWidgetForRange(star.keyword, 'RELATED_QUERIES', RELATED_QUERIES_RANGE, {
+      geo,
+      hl,
+    });
     result.relatedQueries = trendsClient.toRelatedQueries(data);
   } catch (err) {
     result.errors.relatedQueries = err.message || String(err);
@@ -73,4 +72,4 @@ async function fetchStarTrends(star, opts = {}) {
   return result;
 }
 
-module.exports = { fetchStarTrends };
+module.exports = { fetchStarTrends, TIMESERIES_RANGE, RELATED_QUERIES_RANGE };
