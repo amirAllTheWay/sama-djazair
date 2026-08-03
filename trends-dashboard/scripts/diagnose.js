@@ -4,6 +4,14 @@ diagnose()
   .then((report) => {
     console.log(`\nDiagnostic Google Trends — mot-clé « ${report.keyword} »\n`);
 
+    const cookies = report.sessionCookies || [];
+    console.log(`Cookies de session obtenus : ${cookies.length ? cookies.join(', ') : 'aucun'}`);
+    console.log(
+      cookies.includes('NID')
+        ? '   → session ouverte par Google, bon signe.\n'
+        : "   → pas de cookie NID : Google n'a pas ouvert de session, un 429 est attendu.\n"
+    );
+
     for (const step of report.steps) {
       console.log(`── ${step.step}`);
       if (step.networkError) {

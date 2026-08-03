@@ -22,9 +22,15 @@ async function diagnose() {
     ranAt: new Date().toISOString(),
     keyword: star.keyword,
     outboundIpNote:
-      "L'IP sortante est celle de l'hébergeur (Render), pas la tienne — c'est elle que Google évalue.",
+      "C'est l'IP de la machine qui exécute ce code que Google évalue — celle de l'hébergeur en ligne, la tienne en local.",
     steps: [],
   };
+
+  // The session cookies are the thing under test as much as the requests are:
+  // no NID in this list means Google never opened a session, and a 429 on the
+  // very first call is the expected consequence.
+  await trendsClient.warmUp();
+  report.sessionCookies = trendsClient.cookieNames();
 
   const qs = trendsClient.buildExploreQuery({ keyword: star.keyword, geo: '', hl: 'fr', time: 'now 7-d' });
 
