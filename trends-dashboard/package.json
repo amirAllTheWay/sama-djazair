@@ -1,0 +1,17 @@
+{
+  "name": "trends-dashboard",
+  "version": "1.0.0",
+  "description": "Dashboard tracking celebrity fashion trends, polling Google Trends on demand via a refresh button.",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "fetch:once": "node scripts/fetch-once.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "google-trends-api": "^4.9.2"
+  }
+}
