@@ -4,10 +4,6 @@ const querystring = require('querystring');
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
-// Skips Google's cookie-consent interstitial, which otherwise returns an
-// HTML page instead of JSON for requests with no prior session.
-const CONSENT_COOKIE = 'CONSENT=YES+';
-
 const WIDGET_PATHS = {
   TIMESERIES: '/trends/api/widgetdata/multiline',
   RELATED_QUERIES: '/trends/api/widgetdata/relatedsearches',
@@ -17,16 +13,43 @@ const WIDGET_PATHS = {
 // (60 for UTC+1). Google echoes it back in the returned timestamps.
 const TIMEZONE_OFFSET = new Date().getTimezoneOffset();
 
-function requestOnce(host, path) {
+// Cookies Google hands out (NID above all). Hitting the API with no session
+// at all is what a script does, not a browser — Google answers 429 to it even
+// on a first request from a clean residential IP.
+const cookieJar = new Map([['CONSENT', 'YES+']]);
+
+function cookieHeader() {
+  return [...cookieJar].map(([name, value]) => `${name}=${value}`).join('; ');
+}
+
+function storeCookies(headers) {
+  const raw = headers['set-cookie'];
+  if (!raw) return false;
+  let stored = false;
+  for (const entry of raw) {
+    const [pair] = entry.split(';');
+    const index = pair.indexOf('=');
+    if (index === -1) continue;
+    const name = pair.slice(0, index).trim();
+    const value = pair.slice(index + 1).trim();
+    if (!name || cookieJar.get(name) === value) continue;
+    cookieJar.set(name, value);
+    stored = true;
+  }
+  return stored;
+}
+
+function requestOnce(host, path, accept) {
   const options = {
     host,
     path,
     method: 'GET',
     headers: {
       'User-Agent': USER_AGENT,
-      Accept: 'application/json, text/plain, */*',
+      Accept: accept,
       'Accept-Language': 'fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7',
-      Cookie: CONSENT_COOKIE,
+      Referer: 'https://trends.google.com/trends/explore',
+      Cookie: cookieHeader(),
     },
   };
 
@@ -34,21 +57,46 @@ function requestOnce(host, path) {
     const req = https.request(options, (res) => {
       let body = '';
       res.on('data', (chunk) => (body += chunk));
-      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body }));
+      res.on('end', () => {
+        storeCookies(res.headers);
+        resolve({ statusCode: res.statusCode, headers: res.headers, body });
+      });
     });
     req.on('error', reject);
     req.end();
   });
 }
 
-async function get(path, qs, redirectsLeft = 3) {
+// Load the Trends page itself once, the way a browser would, so Google issues
+// the session cookies its API endpoints expect. Runs at most once per process.
+let warmedUp = null;
+function warmUp() {
+  if (!warmedUp) {
+    warmedUp = requestOnce(
+      'trends.google.com',
+      '/trends/explore',
+      'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    ).catch(() => null);
+  }
+  return warmedUp;
+}
+
+async function get(path, qs, redirectsLeft = 3, retryOn429 = true) {
+  await warmUp();
+
   const query = qs ? querystring.stringify(qs) : '';
   const fullPath = query ? `${path}?${query}` : path;
-  const res = await requestOnce('trends.google.com', fullPath);
+  const res = await requestOnce('trends.google.com', fullPath, 'application/json, text/plain, */*');
 
   if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirectsLeft > 0) {
     const location = new URL(res.headers.location, 'https://trends.google.com');
-    return get(location.pathname + location.search, null, redirectsLeft - 1);
+    return get(location.pathname + location.search, null, redirectsLeft - 1, retryOn429);
+  }
+
+  // Google ships a fresh cookie alongside its 429; replaying the request with
+  // it is what the browser does, and it generally succeeds.
+  if (res.statusCode === 429 && retryOn429 && res.headers['set-cookie']) {
+    return get(path, qs, redirectsLeft, false);
   }
 
   return res;
@@ -137,6 +185,9 @@ module.exports = {
   fetchWidget,
   toInterestOverTime,
   toRelatedQueries,
+  // Names only — cookie values are session credentials and stay out of logs.
+  cookieNames: () => [...cookieJar.keys()],
+  warmUp,
   // Exposed for the diagnostics endpoint, which needs the untouched
   // status/headers/body rather than a parsed result or a thrown error.
   rawGet: get,
