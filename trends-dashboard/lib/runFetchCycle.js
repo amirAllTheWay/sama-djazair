@@ -12,11 +12,19 @@ async function runFetchCycle() {
       appendHistory(star.slug, entry);
       const hasErrors = Object.keys(entry.errors).length > 0;
       results.push({ slug: star.slug, ok: !hasErrors });
-      if (hasErrors) {
-        console.warn(`[trends] ${star.slug} fetched with errors:`, entry.errors);
-      } else {
-        console.log(`[trends] ${star.slug} updated (${entry.interestOverTime.length} points)`);
+
+      const timeseries = entry.interestOverTime.length
+        ? `${entry.interestOverTime.length} points`
+        : 'aucune donnée';
+      const related = entry.relatedQueries.top.length + entry.relatedQueries.rising.length;
+      console.log(
+        `[trends] ${star.slug} — courbe: ${timeseries} | recherches associées: ${related || 'aucune'}`
+      );
+
+      for (const [step, message] of Object.entries(entry.errors)) {
+        console.warn(`[trends]   ✗ ${step}: ${message}`);
       }
+      if (!hasErrors) console.log(`[trends]   ✓ collecte complète`);
     } catch (err) {
       results.push({ slug: star.slug, ok: false, error: err.message || String(err) });
       console.error(`[trends] ${star.slug} failed:`, err.message || err);

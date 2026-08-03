@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node server.js",
-    "fetch:once": "node scripts/fetch-once.js"
+    "fetch:once": "node scripts/fetch-once.js",
+    "diagnose": "node scripts/diagnose.js"
   },
   "dependencies": {
     "express": "^4.19.2"
