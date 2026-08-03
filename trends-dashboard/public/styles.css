@@ -91,6 +91,15 @@ h1 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-siz
   max-width: 32ch;
   text-align: right;
 }
+.diag-link {
+  font-size: 0.74rem;
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.diag-link:hover { color: var(--accent); }
+.diag-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 .refresh-message.error { color: var(--error); font-weight: 600; }
 .refresh-message.success { color: var(--rising); font-weight: 600; }
 
