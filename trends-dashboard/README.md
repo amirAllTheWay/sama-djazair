@@ -35,14 +35,24 @@ Conséquences concrètes :
 
 ```bash
 npm install
-npm start          # http://localhost:3000
+npm run dev
 ```
 
 Ouvre `http://localhost:3000` et clique sur **Actualiser**.
 
-Sans lancer le serveur :
+`npm run dev` se lance une fois et ne demande plus rien : il surveille la
+branche courante, récupère les nouveaux commits dès qu'ils arrivent, redémarre
+le serveur, et la page se recharge d'elle-même. Une seule fenêtre de terminal à
+laisser ouverte, aucun `git pull` à taper.
+
+Si des fichiers sont modifiés en local, la récupération automatique est mise en
+pause plutôt que d'écraser le travail en cours — le message le dit dans le
+terminal.
+
+Autres commandes :
 
 ```bash
+npm start            # serveur seul, sans surveillance git (utilisé en production)
 npm run fetch:once   # une collecte unique, écrit dans data/
 npm run diagnose     # ce que Google renvoie vraiment, étape par étape
 ```

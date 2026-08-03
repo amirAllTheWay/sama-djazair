@@ -274,6 +274,26 @@ async function handleRefreshClick() {
   }
 }
 
+// Locally the server restarts on every pulled commit; without this the page
+// keeps showing the markup it was served before the restart. Confined to
+// localhost so a deployed instance never polls.
+function watchForServerRestart() {
+  const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
+  if (!isLocal) return;
+
+  let knownBootId = null;
+  setInterval(async () => {
+    try {
+      const { bootId } = await fetch('/api/version').then((r) => r.json());
+      if (knownBootId === null) knownBootId = bootId;
+      else if (bootId !== knownBootId) location.reload();
+    } catch {
+      // Server mid-restart: the next tick will find it again.
+    }
+  }, 2000);
+}
+
 document.getElementById('refresh-btn').addEventListener('click', handleRefreshClick);
 
 render();
+watchForServerRestart();

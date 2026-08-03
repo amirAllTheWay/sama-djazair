@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node server.js",
+    "dev": "node scripts/dev.js",
     "fetch:once": "node scripts/fetch-once.js",
     "diagnose": "node scripts/diagnose.js"
   },

@@ -8,11 +8,19 @@ const { diagnose } = require('./lib/diagnose');
 const PORT = process.env.PORT || 3000;
 const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MS || 30_000);
 
+// Changes on every boot, so a page can tell it is talking to a restarted
+// server and reload itself rather than sit on stale markup.
+const BOOT_ID = String(Date.now());
+
 let lastRefreshAt = 0;
 let refreshInFlight = null;
 
 const app = express();
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/version', (req, res) => {
+  res.json({ bootId: BOOT_ID });
+});
 
 app.get('/api/trends', (req, res) => {
   res.json(readLatest());
