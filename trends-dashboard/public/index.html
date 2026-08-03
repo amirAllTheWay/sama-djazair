@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Star Style Tracker — live</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="masthead">
+      <div class="eyebrow">Star Style Tracker · données live</div>
+      <div class="masthead-row">
+        <div class="masthead-copy">
+          <h1>Tendances mode des célébrités</h1>
+          <p class="subtitle">Ce serveur interroge lui-même Google Trends toutes les heures et met à jour cette page automatiquement.</p>
+        </div>
+        <div class="meta" id="meta">
+          <span id="updated-at">Chargement…</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="board" id="board">
+      <p class="loading">Chargement des tendances…</p>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

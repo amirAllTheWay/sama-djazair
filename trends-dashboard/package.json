@@ -1,0 +1,15 @@
+{
+  "name": "trends-dashboard",
+  "version": "1.0.0",
+  "description": "Autonomous dashboard tracking celebrity fashion trends via hourly Google Trends polling.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "fetch:once": "node scripts/fetch-once.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "google-trends-api": "^4.9.2",
+    "node-cron": "^3.0.3"
+  }
+}
