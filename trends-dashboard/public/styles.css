@@ -91,7 +91,8 @@ h1 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-siz
   max-width: 32ch;
   text-align: right;
 }
-.refresh-message.error { color: var(--error); }
+.refresh-message.error { color: var(--error); font-weight: 600; }
+.refresh-message.success { color: var(--rising); font-weight: 600; }
 
 .board { display: flex; gap: 1.5rem; align-items: flex-start; overflow-x: auto; padding-bottom: 0.5rem; }
 .loading { color: var(--muted); font-size: 0.9rem; }

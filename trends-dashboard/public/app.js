@@ -196,7 +196,7 @@ async function render() {
   }
 }
 
-function setRefreshMessage(text, isError) {
+function setRefreshMessage(text, kind) {
   const meta = document.getElementById('meta');
   let msgEl = document.getElementById('refresh-message');
   if (!text) {
@@ -210,7 +210,8 @@ function setRefreshMessage(text, isError) {
     meta.appendChild(msgEl);
   }
   msgEl.textContent = text;
-  msgEl.classList.toggle('error', Boolean(isError));
+  msgEl.classList.toggle('error', kind === 'error');
+  msgEl.classList.toggle('success', kind === 'success');
 }
 
 async function handleRefreshClick() {
@@ -224,14 +225,17 @@ async function handleRefreshClick() {
     const body = await res.json();
 
     if (!res.ok) {
-      setRefreshMessage(body.message || 'Échec de l\'actualisation.', true);
+      setRefreshMessage(body.message || 'Échec de l\'actualisation.', 'error');
     } else {
       const anyErrors = body.results?.some((r) => !r.ok);
-      setRefreshMessage(anyErrors ? 'Actualisé, avec des erreurs partielles (voir les colonnes).' : 'Actualisé.');
+      setRefreshMessage(
+        anyErrors ? '⚠ Actualisé avec des erreurs (voir le détail dans les colonnes ci-dessous).' : '✓ Actualisé avec succès.',
+        anyErrors ? 'error' : 'success'
+      );
     }
     await render();
   } catch (err) {
-    setRefreshMessage(`Impossible de joindre le serveur : ${err.message}`, true);
+    setRefreshMessage(`✗ Impossible de joindre le serveur : ${err.message}`, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = 'Actualiser';
