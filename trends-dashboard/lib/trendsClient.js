@@ -50,6 +50,12 @@ async function get(path, qs, redirectsLeft = 3) {
   return res;
 }
 
+function httpError(statusCode, stepName) {
+  const err = new Error(`Google Trends a répondu HTTP ${statusCode} à l'étape "${stepName}".`);
+  err.statusCode = statusCode;
+  return err;
+}
+
 function stripJsonPrefix(body) {
   const start = body.indexOf('{');
   if (start === -1) return body;
@@ -70,6 +76,9 @@ function parseJsonResponse(body, stepName) {
   }
 }
 
+// One "explore" call returns tokens for every widget (timeseries, related
+// queries, etc.) for a given keyword + time range — mirrors what a single
+// visit to the Trends explore page does, instead of one explore per widget.
 async function explore({ keyword, geo, hl, time }) {
   const req = JSON.stringify({
     comparisonItem: [{ keyword, geo, time }],
@@ -78,9 +87,7 @@ async function explore({ keyword, geo, hl, time }) {
   });
 
   const { statusCode, body } = await get('/trends/api/explore', { hl, tz: 0, req });
-  if (statusCode !== 200) {
-    throw new Error(`Google Trends a répondu HTTP ${statusCode} à l'étape "explore".`);
-  }
+  if (statusCode !== 200) throw httpError(statusCode, 'explore');
   const parsed = parseJsonResponse(body, 'explore');
   return parsed.widgets || [];
 }
@@ -94,15 +101,11 @@ async function fetchWidget(widgetId, widgets, { hl }) {
   const path = WIDGET_PATHS[widgetId];
   const req = JSON.stringify(widget.request);
   const { statusCode, body } = await get(path, { hl, tz: 0, req, token: widget.token });
-  if (statusCode !== 200) {
-    throw new Error(`Google Trends a répondu HTTP ${statusCode} à l'étape "${widgetId}".`);
-  }
+  if (statusCode !== 200) throw httpError(statusCode, widgetId);
   return parseJsonResponse(body, widgetId);
 }
 
-async function interestOverTime({ keyword, geo = '', hl = 'fr', windowDays = 7 }) {
-  const widgets = await explore({ keyword, geo, hl, time: `today ${windowDays}-d` });
-  const data = await fetchWidget('TIMESERIES', widgets, { hl });
+function toInterestOverTime(data) {
   const timeline = data?.default?.timelineData || [];
   return timeline.map((point) => ({
     time: Number(point.time) * 1000,
@@ -111,9 +114,7 @@ async function interestOverTime({ keyword, geo = '', hl = 'fr', windowDays = 7 }
   }));
 }
 
-async function relatedQueries({ keyword, geo = '', hl = 'fr' }) {
-  const widgets = await explore({ keyword, geo, hl, time: 'today 12-m' });
-  const data = await fetchWidget('RELATED_QUERIES', widgets, { hl });
+function toRelatedQueries(data) {
   const rankedLists = data?.default?.rankedList || [];
   const toEntries = (list) =>
     (list?.rankedKeyword || []).map((item) => ({
@@ -127,4 +128,4 @@ async function relatedQueries({ keyword, geo = '', hl = 'fr' }) {
   };
 }
 
-module.exports = { interestOverTime, relatedQueries };
+module.exports = { explore, fetchWidget, toInterestOverTime, toRelatedQueries };

@@ -3,27 +3,30 @@ const trendsClient = require('./trendsClient');
 const DEFAULT_GEO = '';
 const DEFAULT_HL = 'fr';
 const WINDOW_DAYS = 7;
-const BETWEEN_CALLS_DELAY_MS = 3000;
-const RETRY_DELAYS_MS = [3000, 8000];
+const BETWEEN_CALLS_DELAY_MS = 2000;
+const RETRY_DELAY_MS = 8000;
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function withRetries(fn) {
-  let lastErr;
-  const attempts = RETRY_DELAYS_MS.length + 1;
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      if (attempt < RETRY_DELAYS_MS.length) {
-        await sleep(RETRY_DELAYS_MS[attempt]);
-      }
-    }
+// Google Trends' own explore/widget syntax: hour/day windows use "now",
+// month/year windows use "today" — mixing them up gets a flat HTTP 400.
+function timeRangeForDays(days) {
+  return `now ${days}-d`;
+}
+
+async function withOneRetry(fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    // A 429 means Google is already rate-limiting this IP — hammering it
+    // again immediately just makes it worse. Let the caller's cooldown
+    // (the refresh button's 30s guard) be the retry mechanism instead.
+    if (err.statusCode === 429) throw err;
+    await sleep(RETRY_DELAY_MS);
+    return fn();
   }
-  throw lastErr;
 }
 
 async function fetchStarTrends(star, opts = {}) {
@@ -39,10 +42,21 @@ async function fetchStarTrends(star, opts = {}) {
     errors: {},
   };
 
+  let widgets = [];
   try {
-    result.interestOverTime = await withRetries(() =>
-      trendsClient.interestOverTime({ keyword: star.keyword, geo, hl, windowDays: WINDOW_DAYS })
+    widgets = await withOneRetry(() =>
+      trendsClient.explore({ keyword: star.keyword, geo, hl, time: timeRangeForDays(WINDOW_DAYS) })
     );
+  } catch (err) {
+    const message = err.message || String(err);
+    result.errors.interestOverTime = message;
+    result.errors.relatedQueries = message;
+    return result;
+  }
+
+  try {
+    const data = await withOneRetry(() => trendsClient.fetchWidget('TIMESERIES', widgets, { hl }));
+    result.interestOverTime = trendsClient.toInterestOverTime(data);
   } catch (err) {
     result.errors.interestOverTime = err.message || String(err);
   }
@@ -50,9 +64,8 @@ async function fetchStarTrends(star, opts = {}) {
   await sleep(BETWEEN_CALLS_DELAY_MS);
 
   try {
-    result.relatedQueries = await withRetries(() =>
-      trendsClient.relatedQueries({ keyword: star.keyword, geo, hl })
-    );
+    const data = await withOneRetry(() => trendsClient.fetchWidget('RELATED_QUERIES', widgets, { hl }));
+    result.relatedQueries = trendsClient.toRelatedQueries(data);
   } catch (err) {
     result.errors.relatedQueries = err.message || String(err);
   }
