@@ -1,75 +1,68 @@
-# Star Style Tracker — dashboard autonome
+# Outfit Trend Tracker
 
-Serveur Node.js qui interroge lui-même Google Trends (aucune requête ne passe
-par Claude) et affiche les résultats sur un dashboard en colonnes, une colonne
-par star. La collecte se déclenche à la demande, via le bouton **Actualiser**
-sur la page — pas de cron, pas d'appel automatique en arrière-plan.
+Dashboard en colonnes suivant les tendances mode des célébrités, une colonne
+par star. Le serveur interroge Google Trends à la demande, quand on clique sur
+**Actualiser** — pas de cron, pas d'appel automatique en arrière-plan.
 
 ## Ce qu'il fait
 
-- Le bouton "Actualiser" du dashboard appelle `POST /api/refresh`, qui
-  récupère pour chaque star listée dans `config/stars.json` :
+- Le bouton "Actualiser" appelle `POST /api/refresh`, qui récupère pour chaque
+  star listée dans `config/stars.json` :
   - la courbe d'intérêt de recherche des 7 derniers jours (`interestOverTime`)
   - les recherches associées les plus fréquentes et celles en forte hausse
     (`relatedQueries`)
 - Les résultats sont stockés dans `data/latest.json` (dernier snapshot) et
   `data/history/<slug>.jsonl` (historique append-only, un point par clic).
-- Un garde-fou anti-spam empêche de relancer une actualisation moins de 30s
-  après la précédente (`REFRESH_COOLDOWN_MS`), pour limiter le risque de se
-  faire bloquer par Google.
+- Un garde-fou empêche de relancer une actualisation moins de 30s après la
+  précédente (`REFRESH_COOLDOWN_MS`), pour limiter le risque de blocage.
 
 ## Limite importante — pas d'API officielle
 
 Google n'expose aucune API publique documentée pour Google Trends (l'ancienne
-"Trends API" a été fermée il y a des années). Ce projet utilise la librairie
-non-officielle [`google-trends-api`](https://www.npmjs.com/package/google-trends-api),
-qui reproduit les mêmes appels que fait le site trends.google.com dans un
-navigateur. Conséquences concrètes :
+"Trends API" a été fermée il y a des années). Ce projet parle directement aux
+endpoints internes `trends.google.com/trends/api/*` que le site utilise
+lui-même (`lib/trendsClient.js`), avec des en-têtes de navigateur réalistes.
+Conséquences concrètes :
 
 - Pas de clé API à demander : ça fonctionne "tel quel", ou pas du tout.
-- Google peut bloquer/limiter ces requêtes (403/429) s'il détecte un usage
-  automatisé. Un clic occasionnel reste raisonnable, mais rien n'est garanti
-  dans la durée — le code logge les échecs (`entry.errors`) sans planter le
-  serveur, et les affiche dans le dashboard au lieu de rester silencieux.
+- Google peut refuser (`403`) ou limiter (`429`) ces requêtes, surtout depuis
+  une IP de datacenter. Le code n'échoue jamais silencieusement : chaque échec
+  est stocké dans `entry.errors` et affiché dans le dashboard.
 - Cette technique n'est pas couverte par les conditions d'utilisation
-  officielles de Google (c'est du scraping des mêmes endpoints que le site
-  utilise). Usage perso/à petit volume, à tes risques.
-- Je n'ai pas pu tester la requête Trends en conditions réelles depuis
-  l'environnement où ce code a été écrit (accès réseau sortant bloqué en
-  dehors d'une liste blanche). À tester en local sur ta machine.
+  officielles de Google. Usage perso, à petit volume, à tes risques.
 
 ## Lancer en local
 
 ```bash
-cd trends-dashboard
 npm install
-npm start          # démarre le serveur sur http://localhost:3000
-# ou, pour tester une seule collecte en ligne de commande, sans passer par le bouton :
-npm run fetch:once
+npm start          # http://localhost:3000
 ```
 
 Ouvre `http://localhost:3000` et clique sur **Actualiser**.
+
+Sans lancer le serveur :
+
+```bash
+npm run fetch:once   # une collecte unique, écrit dans data/
+npm run diagnose     # ce que Google renvoie vraiment, étape par étape
+```
 
 ### Pourquoi le local marche souvent mieux qu'un hébergeur
 
 Google traite très différemment une IP résidentielle (ta box) et une IP de
 datacenter (Render, Railway, Fly.io…). Les IPs d'hébergeurs sont connues et
-agressivement limitées : c'est la cause typique des `403` (requête refusée) et
-`429` (débit limité). Si la collecte échoue en ligne mais fonctionne sur ta
-machine, le code n'est pas en cause — c'est l'IP d'origine.
+agressivement limitées : c'est la cause typique des `403` et `429`. Si la
+collecte échoue en ligne mais fonctionne sur ta machine, le code n'est pas en
+cause — c'est l'IP d'origine.
 
 ## Diagnostiquer un échec
 
-Deux façons de voir ce que Google renvoie réellement, sans deviner :
-
 ```bash
-npm run diagnose   # affiche, étape par étape, statut HTTP + début du corps de réponse
+npm run diagnose
 ```
 
 ou, serveur lancé, ouvrir `http://localhost:3000/api/diagnostics` (également
 accessible via le lien « Voir le diagnostic brut » sous le bouton Actualiser).
-
-Lecture des statuts :
 
 | Statut | Signification |
 |---|---|
@@ -78,21 +71,6 @@ Lecture des statuts :
 | `403` | Google refuse cette IP (typiquement une IP de datacenter) |
 | `429` | débit limité — attendre avant de réessayer |
 | `200` + HTML | page de consentement ou de blocage anti-bot |
-
-## Déployer en un clic sur Render
-
-Un fichier `render.yaml` à la racine du repo décrit le service (build +
-démarrage depuis `trends-dashboard/`). Pour obtenir une URL publique sans
-taper de commande :
-
-1. Va sur `https://render.com/deploy?repo=https://github.com/amirAllTheWay/sama-djazair`
-2. Connecte ton compte GitHub à Render (gratuit, pas de carte requise)
-3. Render détecte `render.yaml`, build et déploie automatiquement
-4. Récupère l'URL fournie par Render (`https://star-style-tracker-xxxx.onrender.com`)
-
-Le tier gratuit de Render met le service en veille après 15 min d'inactivité
-(premier chargement un peu plus lent après une pause) — suffisant pour un
-usage perso occasionnel.
 
 ## Ajouter une star
 
@@ -110,8 +88,33 @@ usage perso occasionnel.
 Redémarrer le serveur — la nouvelle colonne apparaît, vide jusqu'au prochain
 clic sur Actualiser.
 
+## Déployer sur Render
+
+`render.yaml` décrit le service. Depuis le dashboard Render : *New* →
+*Blueprint* → sélectionner ce dépôt. Render détecte le fichier, build et
+déploie automatiquement à chaque commit sur la branche par défaut.
+
+Le tier gratuit met le service en veille après 15 min d'inactivité (premier
+chargement plus lent après une pause).
+
+À savoir : depuis Render, Google renvoie fréquemment `403`/`429` — voir la
+section sur les IPs de datacenter ci-dessus.
+
 ## Variables d'environnement
 
 - `PORT` — port HTTP (défaut `3000`)
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`, soit 30s)
+
+## Structure
+
+```
+server.js            serveur Express + endpoints API
+lib/trendsClient.js  client HTTP bas niveau vers les endpoints Google Trends
+lib/fetchTrends.js   orchestration d'une collecte pour une star
+lib/runFetchCycle.js boucle sur toutes les stars, persiste, logue
+lib/store.js         lecture/écriture de data/
+lib/diagnose.js      rapport brut par étape, pour déboguer un échec
+public/              dashboard (HTML/CSS/JS, sans dépendance)
+config/stars.json    liste des stars suivies
+```
