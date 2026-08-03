@@ -1,20 +1,22 @@
 # Star Style Tracker — dashboard autonome
 
-Serveur Node.js qui interroge lui-même Google Trends toutes les heures (aucune
-requête ne passe par Claude) et affiche les résultats sur un dashboard en
-colonnes, une colonne par star.
+Serveur Node.js qui interroge lui-même Google Trends (aucune requête ne passe
+par Claude) et affiche les résultats sur un dashboard en colonnes, une colonne
+par star. La collecte se déclenche à la demande, via le bouton **Actualiser**
+sur la page — pas de cron, pas d'appel automatique en arrière-plan.
 
 ## Ce qu'il fait
 
-- Un job cron interne (`node-cron`, `0 * * * *` par défaut) tourne dans le
-  process du serveur et récupère, pour chaque star listée dans
-  `config/stars.json` :
+- Le bouton "Actualiser" du dashboard appelle `POST /api/refresh`, qui
+  récupère pour chaque star listée dans `config/stars.json` :
   - la courbe d'intérêt de recherche des 7 derniers jours (`interestOverTime`)
   - les recherches associées les plus fréquentes et celles en forte hausse
     (`relatedQueries`)
 - Les résultats sont stockés dans `data/latest.json` (dernier snapshot) et
-  `data/history/<slug>.jsonl` (historique append-only, un point par cycle).
-- La page `/` lit ces données via `/api/trends` et se rafraîchit toute seule.
+  `data/history/<slug>.jsonl` (historique append-only, un point par clic).
+- Un garde-fou anti-spam empêche de relancer une actualisation moins de 30s
+  après la précédente (`REFRESH_COOLDOWN_MS`), pour limiter le risque de se
+  faire bloquer par Google.
 
 ## Limite importante — pas d'API officielle
 
@@ -26,15 +28,15 @@ navigateur. Conséquences concrètes :
 
 - Pas de clé API à demander : ça fonctionne "tel quel", ou pas du tout.
 - Google peut bloquer/limiter ces requêtes (403/429) s'il détecte un usage
-  automatisé trop fréquent. Un cycle par heure et par star reste raisonnable,
-  mais rien n'est garanti dans la durée — le code logge les échecs
-  (`entry.errors`) sans planter le serveur, et réessaie au cycle suivant.
+  automatisé. Un clic occasionnel reste raisonnable, mais rien n'est garanti
+  dans la durée — le code logge les échecs (`entry.errors`) sans planter le
+  serveur, et les affiche dans le dashboard au lieu de rester silencieux.
 - Cette technique n'est pas couverte par les conditions d'utilisation
   officielles de Google (c'est du scraping des mêmes endpoints que le site
   utilise). Usage perso/à petit volume, à tes risques.
 - Je n'ai pas pu tester la requête Trends en conditions réelles depuis
   l'environnement où ce code a été écrit (accès réseau sortant bloqué en
-  dehors d'une liste blanche). À tester en local ou après déploiement.
+  dehors d'une liste blanche). À tester en local sur ta machine.
 
 ## Lancer en local
 
@@ -42,9 +44,11 @@ navigateur. Conséquences concrètes :
 cd trends-dashboard
 npm install
 npm start          # démarre le serveur sur http://localhost:3000
-# ou, pour tester une seule collecte sans lancer le serveur :
+# ou, pour tester une seule collecte en ligne de commande, sans passer par le bouton :
 npm run fetch:once
 ```
+
+Ouvre `http://localhost:3000` et clique sur **Actualiser**.
 
 ## Ajouter une star
 
@@ -59,22 +63,11 @@ npm run fetch:once
 }
 ```
 
-Redémarrer le serveur — la nouvelle colonne apparaît et sera peuplée au
-prochain cycle (ou immédiatement via `npm run fetch:once`).
+Redémarrer le serveur — la nouvelle colonne apparaît, vide jusqu'au prochain
+clic sur Actualiser.
 
-## Déployer pour un vrai fonctionnement 24/7
-
-Ce serveur doit tourner en continu pour que "toutes les heures" ait un sens.
-Options simples :
-
-- **Railway / Render / Fly.io** : déploiement direct depuis ce dossier
-  (`npm install && npm start`), plan gratuit suffisant pour ce volume.
-- **VPS + pm2** : `pm2 start server.js --name trends-dashboard`.
-- **Docker** : construire une image Node standard exposant le `PORT`
-  (variable d'env, défaut `3000`).
-
-Variables d'environnement utiles :
+## Variables d'environnement
 
 - `PORT` — port HTTP (défaut `3000`)
-- `TRENDS_CRON` — expression cron pour la fréquence (défaut `0 * * * *`,
-  toutes les heures pile)
+- `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
+  `30000`, soit 30s)

@@ -98,7 +98,7 @@ function buildColumn(star, entry) {
   if (!entry) {
     const empty = document.createElement('p');
     empty.className = 'error-box';
-    empty.textContent = "En attente de la première collecte (le prochain cycle horaire va la déclencher).";
+    empty.textContent = "Pas encore de données — clique sur Actualiser en haut de page.";
     body.appendChild(empty);
   } else {
     if (entry.interestOverTime && entry.interestOverTime.length) {
@@ -190,11 +190,54 @@ async function render() {
 
     updatedAtEl.textContent = trendsRes.updatedAt
       ? `Dernière collecte : ${formatUpdatedAt(trendsRes.updatedAt)}`
-      : 'Première collecte en attente';
+      : 'Aucune donnée — clique sur Actualiser';
   } catch (err) {
     board.innerHTML = `<p class="error-box">Impossible de charger les données : ${err.message}</p>`;
   }
 }
 
+function setRefreshMessage(text, isError) {
+  const meta = document.getElementById('meta');
+  let msgEl = document.getElementById('refresh-message');
+  if (!text) {
+    msgEl?.remove();
+    return;
+  }
+  if (!msgEl) {
+    msgEl = document.createElement('span');
+    msgEl.id = 'refresh-message';
+    msgEl.className = 'refresh-message';
+    meta.appendChild(msgEl);
+  }
+  msgEl.textContent = text;
+  msgEl.classList.toggle('error', Boolean(isError));
+}
+
+async function handleRefreshClick() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Actualisation…';
+  setRefreshMessage('');
+
+  try {
+    const res = await fetch('/api/refresh', { method: 'POST' });
+    const body = await res.json();
+
+    if (!res.ok) {
+      setRefreshMessage(body.message || 'Échec de l\'actualisation.', true);
+    } else {
+      const anyErrors = body.results?.some((r) => !r.ok);
+      setRefreshMessage(anyErrors ? 'Actualisé, avec des erreurs partielles (voir les colonnes).' : 'Actualisé.');
+    }
+    await render();
+  } catch (err) {
+    setRefreshMessage(`Impossible de joindre le serveur : ${err.message}`, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Actualiser';
+  }
+}
+
+document.getElementById('refresh-btn').addEventListener('click', handleRefreshClick);
+
 render();
-setInterval(render, 5 * 60 * 1000);

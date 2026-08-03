@@ -9,7 +9,6 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "google-trends-api": "^4.9.2",
-    "node-cron": "^3.0.3"
+    "google-trends-api": "^4.9.2"
   }
 }

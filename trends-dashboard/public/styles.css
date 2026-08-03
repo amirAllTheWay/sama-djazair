@@ -67,7 +67,31 @@ h1 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-siz
 .masthead-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 1rem 2rem; }
 .masthead-copy { display: flex; flex-direction: column; gap: 0.5rem; max-width: 60ch; }
 .subtitle { font-size: 0.98rem; color: var(--muted); max-width: 46ch; line-height: 1.5; margin: 0; }
-.meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.35rem; font-size: 0.8rem; color: var(--muted); text-align: right; white-space: nowrap; }
+.meta { display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; font-size: 0.8rem; color: var(--muted); text-align: right; white-space: nowrap; }
+
+.refresh-btn {
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--surface);
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.refresh-btn:hover:not(:disabled) { background: var(--accent-deep); }
+.refresh-btn:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 2px; }
+.refresh-btn:disabled { opacity: 0.55; cursor: wait; }
+
+.refresh-message {
+  font-size: 0.76rem;
+  color: var(--muted);
+  max-width: 32ch;
+  text-align: right;
+}
+.refresh-message.error { color: var(--error); }
 
 .board { display: flex; gap: 1.5rem; align-items: flex-start; overflow-x: auto; padding-bottom: 0.5rem; }
 .loading { color: var(--muted); font-size: 0.9rem; }
