@@ -11,7 +11,6 @@
     "fetch:once": "node scripts/fetch-once.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "google-trends-api": "^4.9.2"
+    "express": "^4.19.2"
   }
 }
