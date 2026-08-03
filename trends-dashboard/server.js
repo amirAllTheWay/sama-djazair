@@ -3,6 +3,7 @@ const express = require('express');
 
 const { runFetchCycle } = require('./lib/runFetchCycle');
 const { readLatest, readHistory, loadStars } = require('./lib/store');
+const { diagnose } = require('./lib/diagnose');
 
 const PORT = process.env.PORT || 3000;
 const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MS || 30_000);
@@ -23,6 +24,16 @@ app.get('/api/trends/:slug/history', (req, res) => {
 
 app.get('/api/stars', (req, res) => {
   res.json(loadStars());
+});
+
+// Raw view of what Google actually returns at each step, so a failure can be
+// read directly instead of inferred from a parsed error message.
+app.get('/api/diagnostics', async (req, res) => {
+  try {
+    res.json(await diagnose());
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
 });
 
 app.post('/api/refresh', async (req, res) => {

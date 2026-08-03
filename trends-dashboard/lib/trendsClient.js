@@ -128,4 +128,17 @@ function toRelatedQueries(data) {
   };
 }
 
-module.exports = { explore, fetchWidget, toInterestOverTime, toRelatedQueries };
+module.exports = {
+  explore,
+  fetchWidget,
+  toInterestOverTime,
+  toRelatedQueries,
+  // Exposed for the diagnostics endpoint, which needs the untouched
+  // status/headers/body rather than a parsed result or a thrown error.
+  rawGet: get,
+  buildExploreQuery: ({ keyword, geo, hl, time }) => ({
+    hl,
+    tz: 0,
+    req: JSON.stringify({ comparisonItem: [{ keyword, geo, time }], category: 0, property: '' }),
+  }),
+};
