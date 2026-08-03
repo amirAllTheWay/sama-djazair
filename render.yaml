@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: star-style-tracker
+    runtime: node
+    plan: free
+    rootDir: trends-dashboard
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeployTrigger: commit
+    envVars:
+      - key: REFRESH_COOLDOWN_MS
+        value: "30000"

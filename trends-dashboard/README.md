@@ -50,6 +50,21 @@ npm run fetch:once
 
 Ouvre `http://localhost:3000` et clique sur **Actualiser**.
 
+## Déployer en un clic sur Render
+
+Un fichier `render.yaml` à la racine du repo décrit le service (build +
+démarrage depuis `trends-dashboard/`). Pour obtenir une URL publique sans
+taper de commande :
+
+1. Va sur `https://render.com/deploy?repo=https://github.com/amirAllTheWay/sama-djazair`
+2. Connecte ton compte GitHub à Render (gratuit, pas de carte requise)
+3. Render détecte `render.yaml`, build et déploie automatiquement
+4. Récupère l'URL fournie par Render (`https://star-style-tracker-xxxx.onrender.com`)
+
+Le tier gratuit de Render met le service en veille après 15 min d'inactivité
+(premier chargement un peu plus lent après une pause) — suffisant pour un
+usage perso occasionnel.
+
 ## Ajouter une star
 
 Éditer `config/stars.json` :

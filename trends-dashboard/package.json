@@ -1,8 +1,11 @@
 {
   "name": "trends-dashboard",
   "version": "1.0.0",
-  "description": "Autonomous dashboard tracking celebrity fashion trends via hourly Google Trends polling.",
+  "description": "Dashboard tracking celebrity fashion trends, polling Google Trends on demand via a refresh button.",
   "main": "server.js",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node server.js",
     "fetch:once": "node scripts/fetch-once.js"
