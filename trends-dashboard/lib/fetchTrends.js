@@ -1,4 +1,5 @@
 const trendsClient = require('./trendsClient');
+const { isFashionQuery } = require('./fashionVocabulary');
 
 const DEFAULT_GEO = '';
 const DEFAULT_HL = 'fr';
@@ -37,6 +38,28 @@ async function fetchWidgetForRange(keyword, widgetId, time, { geo, hl }) {
   return withOneRetry(() => trendsClient.fetchWidget(widgetId, widgets, { hl }));
 }
 
+function defaultFashionSeeds(keyword) {
+  return [`${keyword} outfit`, `${keyword} style`];
+}
+
+// Results from different seeds overlap heavily, and a seed's own wording comes
+// back as its top result. Drop both, keeping each query once at its best score.
+function mergeQueries(existing, incoming, seed) {
+  const seedKey = seed.toLowerCase().trim();
+  const byQuery = new Map(existing.map((item) => [item.query.toLowerCase().trim(), item]));
+
+  for (const item of incoming) {
+    const key = item.query.toLowerCase().trim();
+    if (key === seedKey) continue;
+    const current = byQuery.get(key);
+    if (!current || (item.value ?? 0) > (current.value ?? 0)) {
+      byQuery.set(key, { ...item, seed });
+    }
+  }
+
+  return [...byQuery.values()].sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+}
+
 async function fetchStarTrends(star, opts = {}) {
   const geo = opts.geo ?? DEFAULT_GEO;
   const hl = opts.hl ?? DEFAULT_HL;
@@ -47,6 +70,7 @@ async function fetchStarTrends(star, opts = {}) {
     fetchedAt: new Date().toISOString(),
     interestOverTime: [],
     relatedQueries: { top: [], rising: [] },
+    fashionQueries: { top: [], rising: [] },
     errors: {},
   };
 
@@ -69,6 +93,33 @@ async function fetchStarTrends(star, opts = {}) {
     result.errors.relatedQueries = err.message || String(err);
   }
 
+  // Searching the name alone mostly surfaces age, films and dating rumours.
+  // Two things narrow it to what people ask about the clothes: the fashion
+  // slice of the broad results, and dedicated lookups on outfit/style terms.
+  const fashion = { top: [], rising: [] };
+  for (const bucket of ['top', 'rising']) {
+    fashion[bucket] = result.relatedQueries[bucket].filter((item) => isFashionQuery(item.query));
+  }
+
+  const seeds = star.fashionSeeds || defaultFashionSeeds(star.keyword);
+  for (const seed of seeds) {
+    await sleep(BETWEEN_CALLS_DELAY_MS);
+    try {
+      const data = await fetchWidgetForRange(seed, 'RELATED_QUERIES', RELATED_QUERIES_RANGE, {
+        geo,
+        hl,
+      });
+      const seedQueries = trendsClient.toRelatedQueries(data);
+      for (const bucket of ['top', 'rising']) {
+        fashion[bucket] = mergeQueries(fashion[bucket], seedQueries[bucket], seed);
+      }
+    } catch (err) {
+      // One sparse seed shouldn't sink the section — record it and move on.
+      result.errors[`fashion:${seed}`] = err.message || String(err);
+    }
+  }
+
+  result.fashionQueries = fashion;
   return result;
 }
 

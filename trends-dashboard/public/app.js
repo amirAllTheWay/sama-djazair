@@ -64,6 +64,29 @@ function drawSparkline(canvas, points) {
   ctx.fill();
 }
 
+function querySection(label, items, rising) {
+  const section = document.createElement('div');
+  section.className = 'query-section';
+
+  const heading = document.createElement('p');
+  heading.className = 'section-label';
+  heading.textContent = label;
+  section.appendChild(heading);
+
+  const list = document.createElement('div');
+  list.className = 'query-list';
+  if (!items.length) {
+    const none = document.createElement('p');
+    none.className = 'block-empty';
+    none.textContent = 'Rien à afficher.';
+    list.appendChild(none);
+  } else {
+    items.slice(0, 8).forEach((item) => list.appendChild(queryRow(item, rising)));
+  }
+  section.appendChild(list);
+  return section;
+}
+
 function queryRow(item, rising) {
   const row = document.createElement('div');
   row.className = 'query-row' + (rising ? ' rising' : '');
@@ -114,30 +137,39 @@ function buildColumn(star, entry) {
       requestAnimationFrame(() => drawSparkline(canvas, entry.interestOverTime));
     }
 
-    if (entry.relatedQueries?.rising?.length) {
-      const section = document.createElement('div');
-      const label = document.createElement('p');
-      label.className = 'section-label';
-      label.textContent = 'Recherches en forte hausse';
-      section.appendChild(label);
-      const list = document.createElement('div');
-      list.className = 'query-list';
-      entry.relatedQueries.rising.slice(0, 6).forEach((item) => list.appendChild(queryRow(item, true)));
-      section.appendChild(list);
-      body.appendChild(section);
-    }
+    const fashion = entry.fashionQueries || { top: [], rising: [] };
+    const hasFashion = fashion.rising.length || fashion.top.length;
 
-    if (entry.relatedQueries?.top?.length) {
-      const section = document.createElement('div');
-      const label = document.createElement('p');
-      label.className = 'section-label';
-      label.textContent = 'Recherches associées les plus fréquentes';
-      section.appendChild(label);
-      const list = document.createElement('div');
-      list.className = 'query-list';
-      entry.relatedQueries.top.slice(0, 6).forEach((item) => list.appendChild(queryRow(item, false)));
-      section.appendChild(list);
-      body.appendChild(section);
+    const fashionBlock = document.createElement('div');
+    fashionBlock.className = 'fashion-block';
+
+    const fashionHeading = document.createElement('p');
+    fashionHeading.className = 'block-heading';
+    fashionHeading.textContent = 'Ce que les gens cherchent sur son style';
+    fashionBlock.appendChild(fashionHeading);
+
+    if (!hasFashion) {
+      const none = document.createElement('p');
+      none.className = 'block-empty';
+      none.textContent =
+        "Aucune recherche mode remontée pour l'instant — Google n'a pas assez de volume sur ces termes.";
+      fashionBlock.appendChild(none);
+    } else {
+      fashionBlock.appendChild(querySection('En forte hausse', fashion.rising, true));
+      fashionBlock.appendChild(querySection('Les plus fréquentes', fashion.top, false));
+    }
+    body.appendChild(fashionBlock);
+
+    const broad = entry.relatedQueries || { top: [], rising: [] };
+    if (broad.rising.length || broad.top.length) {
+      const details = document.createElement('details');
+      details.className = 'broad-details';
+      const summary = document.createElement('summary');
+      summary.textContent = 'Toutes recherches confondues (pas seulement la mode)';
+      details.appendChild(summary);
+      details.appendChild(querySection('En forte hausse', broad.rising, true));
+      details.appendChild(querySection('Les plus fréquentes', broad.top, false));
+      body.appendChild(details);
     }
 
     if (entry.errors && Object.keys(entry.errors).length) {
