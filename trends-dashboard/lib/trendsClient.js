@@ -13,6 +13,10 @@ const WIDGET_PATHS = {
   RELATED_QUERIES: '/trends/api/widgetdata/relatedsearches',
 };
 
+// Same value a browser sends: minutes to add to local time to reach UTC
+// (60 for UTC+1). Google echoes it back in the returned timestamps.
+const TIMEZONE_OFFSET = new Date().getTimezoneOffset();
+
 function requestOnce(host, path) {
   const options = {
     host,
@@ -86,7 +90,7 @@ async function explore({ keyword, geo, hl, time }) {
     property: '',
   });
 
-  const { statusCode, body } = await get('/trends/api/explore', { hl, tz: 0, req });
+  const { statusCode, body } = await get('/trends/api/explore', { hl, tz: TIMEZONE_OFFSET, req });
   if (statusCode !== 200) throw httpError(statusCode, 'explore');
   const parsed = parseJsonResponse(body, 'explore');
   return parsed.widgets || [];
@@ -100,7 +104,7 @@ async function fetchWidget(widgetId, widgets, { hl }) {
 
   const path = WIDGET_PATHS[widgetId];
   const req = JSON.stringify(widget.request);
-  const { statusCode, body } = await get(path, { hl, tz: 0, req, token: widget.token });
+  const { statusCode, body } = await get(path, { hl, tz: TIMEZONE_OFFSET, req, token: widget.token });
   if (statusCode !== 200) throw httpError(statusCode, widgetId);
   return parseJsonResponse(body, widgetId);
 }
