@@ -32,8 +32,10 @@ async function runFetchCycle() {
     results.push({ slug: star.slug, ok: !hasErrors && entry.articles.length > 0 });
 
     const illustrated = entry.articles.filter((a) => a.image).length;
+    const relayed = entry.articles.filter((a) => /news\.google\.com/.test(a.url)).length;
     console.log(
-      `[articles] ${star.slug} — ${entry.articles.length} article(s), ${illustrated} avec photo`
+      `[articles] ${star.slug} — ${entry.articles.length} article(s), ${illustrated} avec photo` +
+        (relayed ? `, ${relayed} lien(s) Google non résolu(s)` : '')
     );
     for (const article of entry.articles) {
       const look = article.garments.length ? article.garments.join(' · ') : 'look non identifié';

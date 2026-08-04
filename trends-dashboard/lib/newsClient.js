@@ -162,15 +162,51 @@ async function searchPublisherFeeds(name, { limit = 20 } = {}) {
 // JavaScript interstitial, so nothing downstream can reach the article page —
 // which is where the photo lives.
 async function searchBingNews(query, { limit = 20 } = {}) {
-  const params = new URLSearchParams({ q: query, format: 'RSS', setmkt: 'en-US', setlang: 'en' });
+  // Extra market/language params make Bing answer 200 with an HTML page instead
+  // of the feed, which parses to zero items and looks like "no coverage".
+  const params = new URLSearchParams({ q: query, format: 'rss' });
   const { statusCode, body } = await fetchUrl(
     `https://www.bing.com/news/search?${params.toString()}`,
     { maxBytes: 900_000 }
   );
   if (statusCode !== 200) throw new Error(`Bing News a répondu HTTP ${statusCode}.`);
-  return parseRssItems(body)
-    .filter((item) => item.link && !isRelay(item.link))
-    .slice(0, limit);
+
+  const items = parseRssItems(body).filter((item) => item.link && !isRelay(item.link));
+  if (!items.length) {
+    // Silence here previously read as "nothing published", so say which it is.
+    throw new Error(
+      body.trim().startsWith('<?xml') || body.includes('<rss')
+        ? 'Bing News a renvoyé un flux vide.'
+        : "Bing News a renvoyé une page HTML au lieu du flux RSS."
+    );
+  }
+  return items.slice(0, limit);
+}
+
+// Turns a headline into the publisher's own URL. Google News relay ids cannot
+// be decoded, but the headline they carry is enough to find the article
+// elsewhere — and a real URL is what makes og:image reachable.
+async function resolveByHeadline(title) {
+  const cleaned = title.replace(/\s+-\s+[^-]{2,40}$/, '').trim();
+  const params = new URLSearchParams({ q: cleaned });
+
+  const { statusCode, body } = await fetchUrl(
+    `https://html.duckduckgo.com/html/?${params.toString()}`,
+    { maxBytes: 400_000 }
+  );
+  if (statusCode !== 200 || !body) return null;
+
+  // Results are wrapped in a redirect carrying the destination in `uddg`.
+  const matches = body.matchAll(/uddg=([^"&]+)/g);
+  for (const match of matches) {
+    try {
+      const url = decodeURIComponent(match[1]);
+      if (/^https?:\/\//.test(url) && !/duckduckgo|google\.com|bing\.com/.test(url)) return url;
+    } catch {
+      /* skip an undecodable result rather than abandon the search */
+    }
+  }
+  return null;
 }
 
 async function searchNews(query, { geo = 'US', hl = 'en-US', limit = 20 } = {}) {
@@ -246,18 +282,30 @@ function metaContent(html, patterns) {
 
 // Resolve a relay link to the publisher's page, whose OpenGraph tags carry the
 // photo and the editor-written summary.
-async function resolvePublisherUrl(link) {
+async function resolvePublisherUrl(link, title) {
   if (!isRelay(link)) return { url: link, html: null };
 
   const decoded = decodeRelayPath(link);
   if (decoded) return { url: decoded, html: null };
 
-  // 3. Last resort: load the interstitial and read the destination out of it.
   const { body, finalUrl } = await fetchUrl(link, { maxBytes: MAX_HTML_BYTES });
   if (finalUrl && !isRelay(finalUrl)) return { url: finalUrl, html: body };
 
   const extracted = body ? extractFromInterstitial(body) : null;
-  return extracted ? { url: extracted, html: null } : { url: link, html: null };
+  if (extracted) return { url: extracted, html: null };
+
+  // 4. The id is opaque and the interstitial gave nothing, so go looking for
+  //    the article by its headline instead.
+  if (title) {
+    try {
+      const found = await resolveByHeadline(title);
+      if (found) return { url: found, html: null };
+    } catch {
+      /* the article still shows, just without its photo */
+    }
+  }
+
+  return { url: link, html: null };
 }
 
 async function enrichArticle(article) {
@@ -269,7 +317,7 @@ async function enrichArticle(article) {
   };
 
   try {
-    const resolved = await resolvePublisherUrl(article.link);
+    const resolved = await resolvePublisherUrl(article.link, article.title);
     enriched.url = resolved.url;
 
     let html = resolved.html;
@@ -308,6 +356,7 @@ async function enrichArticle(article) {
 module.exports = {
   searchNews,
   searchBingNews,
+  resolveByHeadline,
   searchPublisherFeeds,
   PUBLISHER_FEEDS,
   enrichArticle,
