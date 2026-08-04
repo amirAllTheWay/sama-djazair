@@ -116,6 +116,41 @@ const BRANDS = [
   { label: 'New Balance', match: ['new balance'] },
 ];
 
+// The garments themselves, labelled in French for display. Ordered most
+// specific first so "leather tie" is reported rather than plain "cravate".
+const GARMENTS = [
+  { label: 'Cravate en cuir', match: ['leather tie'], absorbs: ['Cravate'] },
+  { label: 'Cravate', match: ['necktie', 'cravate'] },
+  { label: 'Costume rayé', match: ['pinstripe suit', 'pinstripe'], absorbs: ['Costume'] },
+  {
+    label: 'Costume 3 pièces',
+    match: ['three-piece suit', 'three piece suit'],
+    absorbs: ['Costume'],
+  },
+  { label: 'Smoking', match: ['tuxedo', 'tux ', 'smoking'], absorbs: ['Costume'] },
+  { label: 'Costume', match: ['suit', 'costume', 'tailoring'] },
+  { label: 'Veste croisée', match: ['double-breasted', 'double breasted'] },
+  { label: 'Blazer', match: ['blazer'] },
+  { label: 'Manteau', match: ['overcoat', 'trench', 'coat', 'manteau'] },
+  { label: 'Cuir', match: ['leather jacket', 'leather coat'] },
+  { label: 'Maille', match: ['knitwear', 'sweater', 'cardigan', 'jumper', 'maille'] },
+  { label: 'Chemise', match: ['shirt', 'poplin', 'chemise'] },
+  { label: 'T-shirt', match: ['t-shirt', 'tshirt', 'tee '] },
+  { label: 'Jean', match: ['jeans', 'denim'] },
+  { label: 'Pantalon', match: ['trousers', 'pantalon', 'slacks'] },
+  { label: 'Short', match: ['shorts'] },
+  { label: 'Mocassins', match: ['loafers', 'mocassins'] },
+  { label: 'Sneakers', match: ['sneakers', 'trainers', 'baskets'] },
+  { label: 'Bottes', match: ['boots', 'bottes'] },
+  { label: 'Sandales', match: ['sandals', 'flip-flops'] },
+  { label: 'Lunettes de soleil', match: ['sunglasses', 'shades', 'lunettes de soleil'] },
+  { label: 'Sac', match: ['handbag', 'tote', 'crossbody', 'shoulder bag', 'purse', 'sac'] },
+  { label: 'Montre', match: ['watch', 'montre'] },
+  { label: 'Bijoux', match: ['jewellery', 'jewelry', 'earrings', 'necklace', 'bijoux'] },
+  { label: 'Casquette', match: ['cap', 'beanie', 'casquette', 'bonnet'] },
+  { label: 'Écharpe', match: ['scarf', 'écharpe', 'echarpe'] },
+];
+
 // Where a look was worn — the other half of what makes an outfit story usable.
 const OCCASIONS = [
   { label: 'Oscars', match: ['oscars', 'academy awards'] },
@@ -134,7 +169,7 @@ const OCCASIONS = [
   { label: 'Street style', match: ['street style', 'streetwear', 'out and about', 'spotted'] },
 ];
 
-for (const { match } of [...BRANDS, ...OCCASIONS]) FASHION_TERMS.push(...match);
+for (const { match } of [...BRANDS, ...OCCASIONS, ...GARMENTS]) FASHION_TERMS.push(...match);
 
 function normalize(text) {
   return (text || '')
@@ -152,12 +187,27 @@ function isFashionQuery(query) {
 
 function matchLabels(text, dictionary) {
   const haystack = normalize(text);
-  return dictionary
-    .filter(({ match }) => match.some((term) => haystack.includes(normalize(term))))
-    .map(({ label }) => label);
+  const hits = dictionary.filter(({ match }) =>
+    match.some((term) => haystack.includes(normalize(term)))
+  );
+
+  // "Pinstripe suit" matches both the specific entry and the generic one;
+  // listing "Costume rayé, Costume" reads as two garments rather than one.
+  const absorbed = new Set(hits.flatMap((entry) => entry.absorbs || []));
+  return hits.map(({ label }) => label).filter((label) => !absorbed.has(label));
 }
 
 const detectBrands = (text) => matchLabels(text, BRANDS);
 const detectOccasions = (text) => matchLabels(text, OCCASIONS);
+const detectGarments = (text) => matchLabels(text, GARMENTS);
 
-module.exports = { isFashionQuery, detectBrands, detectOccasions, FASHION_TERMS, BRANDS, OCCASIONS };
+module.exports = {
+  isFashionQuery,
+  detectBrands,
+  detectOccasions,
+  detectGarments,
+  FASHION_TERMS,
+  BRANDS,
+  OCCASIONS,
+  GARMENTS,
+};

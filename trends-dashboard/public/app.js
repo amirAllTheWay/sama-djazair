@@ -132,15 +132,30 @@ function articleCard(article) {
   title.textContent = article.title;
   content.appendChild(title);
 
+  const look = [];
+  if (article.garments?.length) look.push({ label: 'Le look', value: article.garments.join(' · ') });
+  if (article.brands.length) look.push({ label: 'Marque', value: article.brands.join(' · ') });
+  if (article.occasions.length) look.push({ label: 'Où', value: article.occasions.join(' · ') });
+
+  if (look.length) {
+    const spec = document.createElement('dl');
+    spec.className = 'look-spec';
+    look.forEach(({ label, value }) => {
+      const dt = document.createElement('dt');
+      dt.textContent = label;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      spec.append(dt, dd);
+    });
+    content.appendChild(spec);
+  }
+
   if (article.summary) {
     const summary = document.createElement('p');
     summary.className = 'article-summary';
     summary.textContent = article.summary;
     content.appendChild(summary);
   }
-
-  if (article.brands.length) content.appendChild(tagList(article.brands, 'brand'));
-  if (article.occasions.length) content.appendChild(tagList(article.occasions, 'occasion'));
 
   card.appendChild(content);
   return card;

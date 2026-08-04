@@ -1,7 +1,16 @@
 const { searchNews, enrichArticle } = require('./newsClient');
-const { detectBrands, detectOccasions, isFashionQuery } = require('./fashionVocabulary');
+const {
+  detectBrands,
+  detectOccasions,
+  detectGarments,
+  isFashionQuery,
+} = require('./fashionVocabulary');
 
-const MAX_ARTICLES = 12;
+// Three cards is what fits a scan-and-decide column. More candidates are
+// enriched than kept, so the three shown are the best of a real field rather
+// than whatever happened to be newest.
+const MAX_ARTICLES = 3;
+const CANDIDATES_TO_ENRICH = 10;
 const ENRICH_CONCURRENCY = 4;
 const RECENT_WINDOW_DAYS = 60;
 
@@ -83,7 +92,7 @@ async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
 
   const candidates = [...collected.values()]
     .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
-    .slice(0, MAX_ARTICLES);
+    .slice(0, CANDIDATES_TO_ENRICH);
 
   const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);
 
@@ -97,6 +106,7 @@ async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
       source: article.source || article.domain || null,
       domain: article.domain || null,
       publishedAt: article.publishedAt,
+      garments: detectGarments(text),
       brands: detectBrands(text),
       occasions: detectOccasions(text),
       outletCount: article.outletCount,
@@ -107,7 +117,7 @@ async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
   for (const article of articles) article.score = buzzScore(article);
   articles.sort((a, b) => b.score - a.score);
 
-  return { articles, errors };
+  return { articles: articles.slice(0, MAX_ARTICLES), errors };
 }
 
 module.exports = { fetchStarArticles, defaultArticleQueries };

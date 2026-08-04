@@ -176,15 +176,37 @@ h1 { font-family: Georgia, "Iowan Old Style", "Times New Roman", serif; font-siz
 
 .article-title { font-size: 0.88rem; line-height: 1.35; margin: 0; font-weight: 600; text-wrap: balance; }
 .article-summary {
-  font-size: 0.78rem;
-  line-height: 1.45;
+  font-size: 0.79rem;
+  line-height: 1.5;
   color: var(--muted);
   margin: 0;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.look-spec {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.6rem;
+  margin: 0.15rem 0 0;
+  padding: 0.55rem 0.65rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 0.76rem;
+}
+.look-spec dt {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.64rem;
+  font-weight: 600;
+  padding-top: 0.1rem;
+  white-space: nowrap;
+}
+.look-spec dd { margin: 0; color: var(--ink); line-height: 1.35; }
 
 .tag-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.1rem; }
 .tag {
