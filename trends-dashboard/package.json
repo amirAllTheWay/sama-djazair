@@ -4,13 +4,13 @@
   "description": "Dashboard of press coverage of celebrity outfits, one column per star.",
   "main": "server.js",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
-    "start": "node server.js",
-    "dev": "node scripts/dev.js",
-    "fetch:once": "node scripts/fetch-once.js",
-    "diagnose": "node scripts/diagnose-articles.js"
+    "start": "node --env-file-if-exists=.env server.js",
+    "dev": "node --env-file-if-exists=.env scripts/dev.js",
+    "fetch:once": "node --env-file-if-exists=.env scripts/fetch-once.js",
+    "diagnose": "node --env-file-if-exists=.env scripts/diagnose-articles.js"
   },
   "dependencies": {
     "express": "^4.19.2"

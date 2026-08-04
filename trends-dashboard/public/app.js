@@ -117,6 +117,114 @@ function articleCard(article) {
   return card;
 }
 
+function articleEntry(article, slug) {
+  const wrap = document.createElement('div');
+  wrap.className = 'article-entry';
+  wrap.appendChild(articleCard(article));
+
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'draft-btn';
+  action.textContent = 'Créer un article';
+  action.addEventListener('click', () => requestDraft(slug, article, action));
+  wrap.appendChild(action);
+
+  return wrap;
+}
+
+async function requestDraft(slug, article, button) {
+  button.disabled = true;
+  button.textContent = 'Rédaction…';
+
+  try {
+    const res = await fetch('/api/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, url: article.url }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || 'Échec de la génération.');
+    openDraftPanel(body);
+  } catch (err) {
+    openDraftPanel({ error: err.message });
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Créer un article';
+  }
+}
+
+function openDraftPanel(payload) {
+  document.getElementById('draft-panel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'draft-panel';
+  panel.className = 'draft-panel';
+
+  const inner = document.createElement('div');
+  inner.className = 'draft-inner';
+
+  const head = document.createElement('div');
+  head.className = 'draft-head';
+  const heading = document.createElement('p');
+  heading.className = 'draft-title';
+  heading.textContent = payload.error ? 'Génération impossible' : 'Brouillon d’article';
+  head.appendChild(heading);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'draft-close';
+  close.setAttribute('aria-label', 'Fermer');
+  close.textContent = '×';
+  close.addEventListener('click', () => panel.remove());
+  head.appendChild(close);
+  inner.appendChild(head);
+
+  if (payload.error) {
+    const err = document.createElement('p');
+    err.className = 'error-box';
+    err.textContent = payload.error;
+    inner.appendChild(err);
+  } else {
+    const meta = document.createElement('p');
+    meta.className = 'draft-meta';
+    const providers = payload.affiliateProviders?.length
+      ? payload.affiliateProviders.join(' + ')
+      : 'aucune plateforme configurée';
+    meta.textContent = `Rédigé par ${payload.generatedBy} · affiliation : ${providers}`;
+    inner.appendChild(meta);
+
+    if (payload.warning) {
+      const warn = document.createElement('p');
+      warn.className = 'error-box';
+      warn.textContent = payload.warning;
+      inner.appendChild(warn);
+    }
+
+    const text = document.createElement('textarea');
+    text.className = 'draft-text';
+    text.readOnly = true;
+    text.value = payload.markdown;
+    inner.appendChild(text);
+
+    const copy = document.createElement('button');
+    copy.type = 'button';
+    copy.className = 'refresh-btn';
+    copy.textContent = 'Copier le markdown';
+    copy.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(payload.markdown);
+      copy.textContent = 'Copié ✓';
+      setTimeout(() => (copy.textContent = 'Copier le markdown'), 1500);
+    });
+    inner.appendChild(copy);
+  }
+
+  panel.appendChild(inner);
+  panel.addEventListener('click', (event) => {
+    if (event.target === panel) panel.remove();
+  });
+  document.body.appendChild(panel);
+}
+
 function buildColumn(star, entry) {
   const col = document.createElement('section');
   col.className = 'column';
@@ -158,7 +266,7 @@ function buildColumn(star, entry) {
 
       const list = document.createElement('div');
       list.className = 'article-list';
-      articles.forEach((article) => list.appendChild(articleCard(article)));
+      articles.forEach((article) => list.appendChild(articleEntry(article, star.slug)));
       body.appendChild(list);
     }
 

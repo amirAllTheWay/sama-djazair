@@ -48,7 +48,7 @@ async function pullIfBehind(branch) {
   return true;
 }
 
-const server = spawn('node', ['--watch', 'server.js'], {
+const server = spawn('node', ['--watch', '--env-file-if-exists=.env', 'server.js'], {
   cwd: path.join(__dirname, '..'),
   stdio: 'inherit',
 });

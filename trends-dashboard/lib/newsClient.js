@@ -9,7 +9,7 @@ const REQUEST_TIMEOUT_MS = 12_000;
 // pages for a dozen results would cost far more than the tags are worth.
 const MAX_HTML_BYTES = 200_000;
 
-function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity } = {}) {
+function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {} } = {}) {
   return new Promise((resolve, reject) => {
     let url;
     try {
@@ -27,6 +27,7 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity } = {}) {
           'User-Agent': USER_AGENT,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
+          ...headers,
         },
       },
       (res) => {
@@ -34,7 +35,7 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity } = {}) {
           res.resume();
           if (redirectsLeft <= 0) return reject(new Error('Trop de redirections'));
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchUrl(next, { redirectsLeft: redirectsLeft - 1, maxBytes }));
+          return resolve(fetchUrl(next, { redirectsLeft: redirectsLeft - 1, maxBytes, headers }));
         }
 
         let body = '';

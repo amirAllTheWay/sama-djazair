@@ -78,3 +78,33 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 - `PORT` — port HTTP (défaut `3000`)
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`)
+
+## Créer un article depuis une carte
+
+Chaque carte porte un bouton **Créer un article**. Il produit un brouillon
+markdown : description du look, pourquoi il fonctionne, section shopping avec
+liens d'affiliation, et trois accroches TikTok. Le brouillon s'ouvre dans un
+panneau, prêt à copier.
+
+### Rédaction
+
+Copie `.env.example` en `.env` et renseigne `GEMINI_API_KEY` — la clé est
+gratuite sur [AI Studio](https://aistudio.google.com/apikey), sans carte
+bancaire. Sans clé, le brouillon reste produit mais non rédigé : un plan
+pré-rempli avec toutes les informations connues, à compléter à la main.
+
+### Affiliation
+
+`ShopMy` et `impact.com` sont interrogés pour chaque pièce détectée, et le
+premier qui renvoie un lien l'emporte — la couverture d'un vêtement donné
+n'étant pas prévisible à l'avance. Renseigne l'une, l'autre, ou les deux :
+
+- `SHOPMY_API_KEY`
+- `IMPACT_ACCOUNT_SID`, `IMPACT_AUTH_TOKEN`, `IMPACT_PROGRAM_ID`
+
+Sans identifiants, les liens pointent vers une recherche produit classique et
+sont explicitement marqués « lien non affilié » dans le brouillon, pour qu'un
+lien non rémunérateur ne passe jamais pour un lien affilié.
+
+Les requêtes d'achat combinent marque et pièce (« Bottega Veneta cravate en
+cuir ») plutôt que la marque seule, qui ne mène qu'à une page d'accueil.
