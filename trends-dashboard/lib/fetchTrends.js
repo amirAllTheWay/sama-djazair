@@ -6,8 +6,9 @@ const { isFashionQuery } = require('./fashionVocabulary');
 // the returned query strings are made of. Override per star via `geo`.
 const DEFAULT_GEO = 'US';
 const DEFAULT_HL = 'en-US';
-const BETWEEN_CALLS_DELAY_MS = 2000;
+const BETWEEN_CALLS_DELAY_MS = 4000;
 const RETRY_DELAY_MS = 8000;
+const THROTTLED_BACKOFF_MS = 12_000;
 
 // Google Trends' range syntax: hour/day windows use "now N-d", month/year
 // windows use "today N-m" — mixing the two gets a flat HTTP 400.
@@ -27,10 +28,13 @@ async function withOneRetry(fn) {
   try {
     return await fn();
   } catch (err) {
-    // A 429 means Google is already rate-limiting this IP — hammering it
-    // again immediately just makes it worse. Let the caller's cooldown
-    // (the refresh button's 30s guard) be the retry mechanism instead.
-    if (err.statusCode === 429) throw err;
+    if (err.statusCode === 429) {
+      // Backing off and opening a fresh session is the only retry that can
+      // succeed here; an immediate replay reuses the throttled one.
+      await sleep(THROTTLED_BACKOFF_MS);
+      await trendsClient.resetSession();
+      return fn();
+    }
     await sleep(RETRY_DELAY_MS);
     return fn();
   }
@@ -43,9 +47,6 @@ async function fetchWidgetForRange(keyword, widgetId, time, { geo, hl, category 
   return withOneRetry(() => trendsClient.fetchWidget(widgetId, widgets, { hl }));
 }
 
-function defaultFashionSeeds(keyword) {
-  return [`${keyword} outfit`, `${keyword} style`];
-}
 
 // Results from different seeds overlap heavily, and a seed's own wording comes
 // back as its top result. Drop both, keeping each query once at its best score.
@@ -99,11 +100,12 @@ async function fetchStarTrends(star, opts = {}) {
     result.errors.relatedQueries = err.message || String(err);
   }
 
-  // Searching the name alone mostly surfaces age, films and dating rumours.
-  // Three things narrow it to what people ask about the clothes: a category
-  // filter (by far the most effective when the right id is known — see
-  // `npm run find-category`), the fashion slice of the broad results, and
-  // dedicated lookups on outfit/style terms.
+  // Searching the name alone mostly surfaces age, films and dating rumours, so
+  // the fashion slice is filtered out of the broad results. Per-seed lookups
+  // ("<name> outfit", "<name> style") used to run here too and were dropped:
+  // those terms are too low-volume for Google to attach related searches to, so
+  // they returned nothing while tripling the request count into a 429. A
+  // category id, when one is configured, buys the same narrowing for one call.
   const fashion = { top: [], rising: [] };
 
   if (star.category) {
@@ -125,24 +127,6 @@ async function fetchStarTrends(star, opts = {}) {
   for (const bucket of ['top', 'rising']) {
     const filtered = result.relatedQueries[bucket].filter((item) => isFashionQuery(item.query));
     fashion[bucket] = mergeQueries(fashion[bucket], filtered, star.keyword);
-  }
-
-  const seeds = star.fashionSeeds || defaultFashionSeeds(star.keyword);
-  for (const seed of seeds) {
-    await sleep(BETWEEN_CALLS_DELAY_MS);
-    try {
-      const data = await fetchWidgetForRange(seed, 'RELATED_QUERIES', RELATED_QUERIES_RANGE, {
-        geo,
-        hl,
-      });
-      const seedQueries = trendsClient.toRelatedQueries(data);
-      for (const bucket of ['top', 'rising']) {
-        fashion[bucket] = mergeQueries(fashion[bucket], seedQueries[bucket], seed);
-      }
-    } catch (err) {
-      // One sparse seed shouldn't sink the section — record it and move on.
-      result.errors[`fashion:${seed}`] = err.message || String(err);
-    }
   }
 
   result.fashionQueries = fashion;

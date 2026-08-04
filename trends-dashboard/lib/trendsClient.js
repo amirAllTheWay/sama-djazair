@@ -81,6 +81,16 @@ function warmUp() {
   return warmedUp;
 }
 
+// A 429 means the session Google handed us is being throttled, so replaying it
+// with the same cookies asks the same rejected question again. Dropping them
+// and re-opening the session is what actually changes the outcome.
+async function resetSession() {
+  cookieJar.clear();
+  cookieJar.set('CONSENT', 'YES+');
+  warmedUp = null;
+  await warmUp();
+}
+
 async function get(path, qs, redirectsLeft = 3, retryOn429 = true) {
   await warmUp();
 
@@ -188,6 +198,7 @@ module.exports = {
   // Names only — cookie values are session credentials and stay out of logs.
   cookieNames: () => [...cookieJar.keys()],
   warmUp,
+  resetSession,
   // Exposed for the diagnostics endpoint, which needs the untouched
   // status/headers/body rather than a parsed result or a thrown error.
   rawGet: get,
