@@ -11,11 +11,11 @@ const {
   isFashionQuery,
 } = require('./fashionVocabulary');
 
-// Three cards is what fits a scan-and-decide column. More candidates are
-// enriched than kept, so the three shown are the best of a real field rather
-// than whatever happened to be newest.
-const MAX_ARTICLES = 3;
-const CANDIDATES_TO_ENRICH = 10;
+// Four cards keeps the column scannable while leaving room for both sources
+// to be represented. More candidates are enriched than kept, so the ones shown
+// are the best of a real field rather than whatever happened to be newest.
+const MAX_ARTICLES = 4;
+const CANDIDATES_TO_ENRICH = 12;
 const ENRICH_CONCURRENCY = 4;
 const RECENT_WINDOW_DAYS = 60;
 
@@ -45,12 +45,14 @@ function ageInDays(publishedAt) {
 
 // No public API reports share counts any more, so "most shared" is inferred:
 // a story several outlets picked up travelled further than one nobody else
-// touched, and recency decays that weight.
+// touched, and recency decays that weight. A photo is a tie-breaker rather
+// than a gate: Google News links cannot be illustrated, and dropping those
+// stories would cost the coverage they carry.
 function buzzScore(article) {
   const age = ageInDays(article.publishedAt);
   const recency = age === null ? 0.3 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
   const pickup = Math.min(article.outletCount / 4, 1);
-  const illustrated = article.image ? 0.3 : 0;
+  const illustrated = article.image ? 0.1 : 0;
   const identified = article.brands.length ? 0.15 : 0;
   return recency * 0.5 + pickup * 0.35 + illustrated + identified;
 }
@@ -116,15 +118,13 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     }
   }
 
-  // Google News last: its relay links resolve to nothing usable, so it only
-  // contributes headlines and pickup counts for stories already found.
-  if (collected.size < CANDIDATES_TO_ENRICH) {
-    for (const query of queries) {
-      try {
-        for (const item of await searchNews(query, { geo, hl })) absorb(item, query);
-      } catch (err) {
-        errors[`news:${query}`] = err.message || String(err);
-      }
+  // Google News covers outlets Bing misses, and its headlines stand on their
+  // own — a story worth knowing about is worth a card even unillustrated.
+  for (const query of queries) {
+    try {
+      for (const item of await searchNews(query, { geo, hl })) absorb(item, query);
+    } catch (err) {
+      errors[`news:${query}`] = err.message || String(err);
     }
   }
 

@@ -29,6 +29,20 @@ function formatArticleDate(value) {
   return new Date(time).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+// Google News hands back the headline again as the description, sometimes with
+// the outlet appended. Repeating it under the title adds a line and says
+// nothing, so those summaries are dropped rather than displayed.
+function echoesTitle(summary, title) {
+  const normalise = (text) =>
+    text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const cleanSummary = normalise(summary);
+  const cleanTitle = normalise(title);
+  return cleanSummary.startsWith(cleanTitle) || cleanTitle.startsWith(cleanSummary);
+}
+
 function articleCard(article) {
   const card = document.createElement('a');
   card.className = 'article-card';
@@ -92,7 +106,7 @@ function articleCard(article) {
     content.appendChild(spec);
   }
 
-  if (article.summary) {
+  if (article.summary && !echoesTitle(article.summary, article.title)) {
     const summary = document.createElement('p');
     summary.className = 'article-summary';
     summary.textContent = article.summary;
