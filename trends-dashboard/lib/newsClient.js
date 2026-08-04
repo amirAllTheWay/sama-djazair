@@ -77,6 +77,10 @@ function tagContent(xml, tag) {
   return decodeEntities(match[1].replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '')).trim();
 }
 
+function isRelay(url) {
+  return /(^|\/\/)news\.google\.com/.test(url);
+}
+
 // Publisher feeds carry the photo inline, under whichever of these tags their
 // CMS emits. Reading it here avoids a request and survives sites that block us.
 function feedImage(item) {
@@ -153,6 +157,22 @@ async function searchPublisherFeeds(name, { limit = 20 } = {}) {
   return { items: found.slice(0, limit), errors };
 }
 
+// Bing's news feed links straight to the publisher. Google News now hides its
+// destinations behind opaque relay ids that carry no URL to decode and serve a
+// JavaScript interstitial, so nothing downstream can reach the article page —
+// which is where the photo lives.
+async function searchBingNews(query, { limit = 20 } = {}) {
+  const params = new URLSearchParams({ q: query, format: 'RSS', setmkt: 'en-US', setlang: 'en' });
+  const { statusCode, body } = await fetchUrl(
+    `https://www.bing.com/news/search?${params.toString()}`,
+    { maxBytes: 900_000 }
+  );
+  if (statusCode !== 200) throw new Error(`Bing News a répondu HTTP ${statusCode}.`);
+  return parseRssItems(body)
+    .filter((item) => item.link && !isRelay(item.link))
+    .slice(0, limit);
+}
+
 async function searchNews(query, { geo = 'US', hl = 'en-US', limit = 20 } = {}) {
   const params = new URLSearchParams({
     q: query,
@@ -208,9 +228,6 @@ function extractFromInterstitial(html) {
   return null;
 }
 
-function isRelay(url) {
-  return /(^|\/\/)news\.google\.com/.test(url);
-}
 
 function metaContent(html, patterns) {
   for (const pattern of patterns) {
@@ -290,6 +307,7 @@ async function enrichArticle(article) {
 
 module.exports = {
   searchNews,
+  searchBingNews,
   searchPublisherFeeds,
   PUBLISHER_FEEDS,
   enrichArticle,

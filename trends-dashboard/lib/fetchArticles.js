@@ -1,4 +1,9 @@
-const { searchNews, searchPublisherFeeds, enrichArticle } = require('./newsClient');
+const {
+  searchNews,
+  searchBingNews,
+  searchPublisherFeeds,
+  enrichArticle,
+} = require('./newsClient');
 const {
   detectBrands,
   detectOccasions,
@@ -91,9 +96,8 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([label]) });
   }
 
-  // Publisher feeds first: they hand over the real article URL and the photo
-  // inline, where Google News gives a relay link that has to be unwrapped and
-  // a page that often blocks us.
+  // Publisher feeds carry the photo inline, but only hold the last few dozen
+  // articles across all topics, so a given star is often absent from them.
   try {
     const direct = await searchPublisherFeeds(star.name || star.keyword);
     for (const item of direct.items) absorb(item, 'flux éditeur');
@@ -102,17 +106,37 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     errors.publisherFeeds = err.message || String(err);
   }
 
+  // Bing carries the search breadth and, crucially, links straight to the
+  // publisher — so the article page can be read for its photo.
   for (const query of queries) {
     try {
-      const items = await searchNews(query, { geo, hl });
-      for (const item of items) absorb(item, query);
+      for (const item of await searchBingNews(query)) absorb(item, query);
     } catch (err) {
-      errors[`news:${query}`] = err.message || String(err);
+      errors[`bing:${query}`] = err.message || String(err);
     }
   }
 
+  // Google News last: its relay links resolve to nothing usable, so it only
+  // contributes headlines and pickup counts for stories already found.
+  if (collected.size < CANDIDATES_TO_ENRICH) {
+    for (const query of queries) {
+      try {
+        for (const item of await searchNews(query, { geo, hl })) absorb(item, query);
+      } catch (err) {
+        errors[`news:${query}`] = err.message || String(err);
+      }
+    }
+  }
+
+  // Enrich the ones that can still yield a photo first: a Google relay link
+  // resolves to nothing, so it should never displace a direct publisher link.
+  const resolvable = (item) => (item.feedImage ? 0 : /news\.google\.com/.test(item.link) ? 2 : 1);
   const candidates = [...collected.values()]
-    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+    .sort(
+      (a, b) =>
+        resolvable(a) - resolvable(b) ||
+        Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)
+    )
     .slice(0, CANDIDATES_TO_ENRICH);
 
   const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);

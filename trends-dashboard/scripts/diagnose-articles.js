@@ -3,7 +3,13 @@
 //
 //   npm run diagnose
 
-const { PUBLISHER_FEEDS, fetchUrl, searchNews, enrichArticle } = require('../lib/newsClient');
+const {
+  PUBLISHER_FEEDS,
+  fetchUrl,
+  searchNews,
+  searchBingNews,
+  enrichArticle,
+} = require('../lib/newsClient');
 const { loadStars } = require('../lib/store');
 
 const name = process.argv[2] || loadStars()[0]?.name || 'Jacob Elordi';
@@ -39,7 +45,23 @@ function truncate(value, length = 70) {
   }
   console.log(`   → ${withImages} article(s) illustré(s) trouvé(s) dans les flux directs\n`);
 
-  console.log('2. Google News + résolution du lien');
+  console.log('2. Bing News (liens directs vers les éditeurs)');
+  try {
+    const items = await searchBingNews(`${name} outfit`);
+    console.log(`   ${items.length} résultats\n`);
+
+    for (const item of items.slice(0, 3)) {
+      console.log(`   « ${truncate(item.title)} »`);
+      console.log(`     lien      : ${truncate(item.link, 60)}`);
+      const enriched = await enrichArticle(item);
+      console.log(`     photo     : ${enriched.image ? '✓ ' + truncate(enriched.image, 55) : '✗ aucune'}`);
+      console.log(`     résumé    : ${enriched.summary ? '✓ ' + truncate(enriched.summary, 55) : '✗ aucun'}\n`);
+    }
+  } catch (err) {
+    console.log(`   échec — ${err.message}\n`);
+  }
+
+  console.log('3. Google News + résolution du lien');
   try {
     const items = await searchNews(`${name} outfit`, {});
     console.log(`   ${items.length} résultats`);
@@ -56,7 +78,7 @@ function truncate(value, length = 70) {
     console.log(`   échec — ${err.message}`);
   }
 
-  console.log('\nLecture : si les flux éditeurs remontent des articles illustrés,');
-  console.log('les photos apparaîtront. Si « résolu » reste sur news.google.com,');
-  console.log("c'est la résolution du lien relais qui bloque.\n");
+  console.log('Lecture : la section 2 est celle qui compte. Si Bing renvoie des');
+  console.log('résultats avec « photo ✓ », les cartes seront illustrées. Si Bing');
+  console.log('échoue ou que les photos manquent, colle cette sortie.\n');
 })();
