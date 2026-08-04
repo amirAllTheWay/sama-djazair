@@ -230,7 +230,12 @@ function buildColumn(star, entry) {
       sparkWrap.appendChild(canvas);
       const caption = document.createElement('div');
       caption.className = 'sparkline-caption';
-      caption.textContent = `Intérêt de recherche — 7 derniers jours (${entry.interestOverTime.length} points)`;
+      const collectedAt = entry.interestOverTimeAt;
+      const staleNote =
+        collectedAt && collectedAt !== entry.fetchedAt
+          ? ` — collecté ${formatUpdatedAt(collectedAt)}`
+          : '';
+      caption.textContent = `Intérêt de recherche — 7 derniers jours (${entry.interestOverTime.length} points)${staleNote}`;
       sparkWrap.appendChild(caption);
       body.appendChild(sparkWrap);
       requestAnimationFrame(() => drawSparkline(canvas, entry.interestOverTime));
@@ -300,9 +305,19 @@ function buildColumn(star, entry) {
     }
 
     if (entry.errors && Object.keys(entry.errors).length) {
+      const messages = [...new Set(Object.values(entry.errors))];
       const err = document.createElement('div');
       err.className = 'error-box';
-      err.textContent = `Dernière collecte partiellement échouée : ${Object.values(entry.errors).join(' · ')}`;
+
+      if (messages.every((m) => m.includes('429'))) {
+        // Every step reporting the same throttle is one problem, not five, and
+        // the only useful response is a wait — say that instead of listing it.
+        err.textContent = entry.stale
+          ? 'Google limite les requêtes en ce moment. Les chiffres affichés sont ceux de la dernière collecte réussie ; réessaie dans une dizaine de minutes.'
+          : 'Google limite les requêtes en ce moment. Réessaie dans une dizaine de minutes — les articles ci-dessus ne sont pas concernés.';
+      } else {
+        err.textContent = `Dernière collecte partiellement échouée : ${messages.join(' · ')}`;
+      }
       body.appendChild(err);
     }
   }
