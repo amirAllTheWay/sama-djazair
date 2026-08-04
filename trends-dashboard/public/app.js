@@ -64,6 +64,88 @@ function drawSparkline(canvas, points) {
   ctx.fill();
 }
 
+function formatArticleDate(value) {
+  const time = Date.parse(value);
+  if (Number.isNaN(time)) return '';
+  const days = Math.floor((Date.now() - time) / 86400000);
+  if (days <= 0) return "aujourd'hui";
+  if (days === 1) return 'hier';
+  if (days < 7) return `il y a ${days} jours`;
+  if (days < 30) return `il y a ${Math.floor(days / 7)} sem.`;
+  return new Date(time).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+}
+
+function tagList(labels, variant) {
+  const wrap = document.createElement('div');
+  wrap.className = 'tag-row';
+  labels.forEach((label) => {
+    const tag = document.createElement('span');
+    tag.className = `tag tag-${variant}`;
+    tag.textContent = label;
+    wrap.appendChild(tag);
+  });
+  return wrap;
+}
+
+function articleCard(article) {
+  const card = document.createElement('a');
+  card.className = 'article-card';
+  card.href = article.url;
+  card.target = '_blank';
+  card.rel = 'noopener';
+
+  if (article.image) {
+    const figure = document.createElement('div');
+    figure.className = 'article-image';
+    const img = document.createElement('img');
+    img.src = article.image;
+    img.alt = '';
+    img.loading = 'lazy';
+    // A dead publisher image would otherwise leave a broken-icon gap.
+    img.addEventListener('error', () => figure.remove());
+    figure.appendChild(img);
+    card.appendChild(figure);
+  }
+
+  const content = document.createElement('div');
+  content.className = 'article-content';
+
+  const meta = document.createElement('div');
+  meta.className = 'article-meta';
+  const source = document.createElement('span');
+  source.className = 'article-source';
+  source.textContent = article.source || article.domain || 'Source inconnue';
+  meta.appendChild(source);
+  const date = document.createElement('span');
+  date.textContent = formatArticleDate(article.publishedAt);
+  meta.appendChild(date);
+  if (article.outletCount > 1) {
+    const pickup = document.createElement('span');
+    pickup.className = 'article-pickup';
+    pickup.textContent = `repris ×${article.outletCount}`;
+    meta.appendChild(pickup);
+  }
+  content.appendChild(meta);
+
+  const title = document.createElement('p');
+  title.className = 'article-title';
+  title.textContent = article.title;
+  content.appendChild(title);
+
+  if (article.summary) {
+    const summary = document.createElement('p');
+    summary.className = 'article-summary';
+    summary.textContent = article.summary;
+    content.appendChild(summary);
+  }
+
+  if (article.brands.length) content.appendChild(tagList(article.brands, 'brand'));
+  if (article.occasions.length) content.appendChild(tagList(article.occasions, 'occasion'));
+
+  card.appendChild(content);
+  return card;
+}
+
 function querySection(label, items, rising) {
   const section = document.createElement('div');
   section.className = 'query-section';
@@ -95,7 +177,9 @@ function queryRow(item, rising) {
   q.textContent = item.query;
   const v = document.createElement('span');
   v.className = 'v';
-  v.textContent = rising ? `+${item.formattedValue}` : item.formattedValue;
+  // Google already formats rising values ("+900%", "Breakout") — prefixing a
+  // second plus produced "++900%".
+  v.textContent = item.formattedValue;
   row.append(q, v);
   return row;
 }
@@ -159,6 +243,34 @@ function buildColumn(star, entry) {
       fashionBlock.appendChild(querySection('Les plus fréquentes', fashion.top, false));
     }
     body.appendChild(fashionBlock);
+
+    const articles = entry.articles || [];
+    const articleBlock = document.createElement('div');
+    articleBlock.className = 'article-block';
+
+    const articleHeading = document.createElement('p');
+    articleHeading.className = 'block-heading';
+    articleHeading.textContent = 'Ses tenues dans la presse';
+    articleBlock.appendChild(articleHeading);
+
+    if (!articles.length) {
+      const none = document.createElement('p');
+      none.className = 'block-empty';
+      none.textContent = "Aucun article mode trouvé pour l'instant.";
+      articleBlock.appendChild(none);
+    } else {
+      const note = document.createElement('p');
+      note.className = 'block-note';
+      note.textContent =
+        'Classé par reprise médiatique et récence. Les compteurs de partages ne sont plus publics — « repris ×N » indique le nombre de médias ayant couvert le même sujet.';
+      articleBlock.appendChild(note);
+
+      const list = document.createElement('div');
+      list.className = 'article-list';
+      articles.forEach((article) => list.appendChild(articleCard(article)));
+      articleBlock.appendChild(list);
+    }
+    body.appendChild(articleBlock);
 
     const broad = entry.relatedQueries || { top: [], rising: [] };
     if (broad.rising.length || broad.top.length) {

@@ -1,0 +1,113 @@
+const { searchNews, enrichArticle } = require('./newsClient');
+const { detectBrands, detectOccasions, isFashionQuery } = require('./fashionVocabulary');
+
+const MAX_ARTICLES = 12;
+const ENRICH_CONCURRENCY = 4;
+const RECENT_WINDOW_DAYS = 60;
+
+function defaultArticleQueries(keyword) {
+  return [`${keyword} outfit`, `${keyword} style`, `${keyword} wore`, `${keyword} red carpet`];
+}
+
+function dedupeKey(article) {
+  // Same story syndicated across outlets keeps its headline; the URL does not.
+  return article.title
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 70);
+}
+
+function ageInDays(publishedAt) {
+  const time = Date.parse(publishedAt);
+  if (Number.isNaN(time)) return null;
+  return (Date.now() - time) / (1000 * 60 * 60 * 24);
+}
+
+// No public API reports share counts any more, so "most shared" is inferred:
+// a story several outlets picked up travelled further than one nobody else
+// touched, and recency decays that weight.
+function buzzScore(article) {
+  const age = ageInDays(article.publishedAt);
+  const recency = age === null ? 0.3 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
+  const pickup = Math.min(article.outletCount / 4, 1);
+  const illustrated = article.image ? 0.15 : 0;
+  const identified = article.brands.length ? 0.15 : 0;
+  return recency * 0.5 + pickup * 0.35 + illustrated + identified;
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      results[index] = await worker(items[index]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
+}
+
+async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
+  const queries = star.articleQueries || defaultArticleQueries(star.keyword);
+  const collected = new Map();
+  const errors = {};
+
+  for (const query of queries) {
+    try {
+      const items = await searchNews(query, { geo, hl });
+      for (const item of items) {
+        if (!item.title || !item.link) continue;
+
+        // The feed answers the query loosely; keep only what is about clothes.
+        const haystack = `${item.title} ${item.snippet || ''}`;
+        if (!isFashionQuery(haystack)) continue;
+
+        const key = dedupeKey(item);
+        const existing = collected.get(key);
+        if (existing) {
+          existing.outletCount += 1;
+          existing.matchedQueries.add(query);
+          continue;
+        }
+        collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([query]) });
+      }
+    } catch (err) {
+      errors[`news:${query}`] = err.message || String(err);
+    }
+  }
+
+  const candidates = [...collected.values()]
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+    .slice(0, MAX_ARTICLES);
+
+  const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);
+
+  const articles = enriched.map((article) => {
+    const text = `${article.title} ${article.summary || ''}`;
+    return {
+      title: article.title,
+      url: article.url,
+      image: article.image,
+      summary: article.summary,
+      source: article.source || article.domain || null,
+      domain: article.domain || null,
+      publishedAt: article.publishedAt,
+      brands: detectBrands(text),
+      occasions: detectOccasions(text),
+      outletCount: article.outletCount,
+      matchedQueries: [...article.matchedQueries],
+    };
+  });
+
+  for (const article of articles) article.score = buzzScore(article);
+  articles.sort((a, b) => b.score - a.score);
+
+  return { articles, errors };
+}
+
+module.exports = { fetchStarArticles, defaultArticleQueries };
