@@ -1,4 +1,4 @@
-const { searchNews, enrichArticle } = require('./newsClient');
+const { searchNews, searchPublisherFeeds, enrichArticle } = require('./newsClient');
 const {
   detectBrands,
   detectOccasions,
@@ -45,7 +45,7 @@ function buzzScore(article) {
   const age = ageInDays(article.publishedAt);
   const recency = age === null ? 0.3 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
   const pickup = Math.min(article.outletCount / 4, 1);
-  const illustrated = article.image ? 0.15 : 0;
+  const illustrated = article.image ? 0.3 : 0;
   const identified = article.brands.length ? 0.15 : 0;
   return recency * 0.5 + pickup * 0.35 + illustrated + identified;
 }
@@ -70,25 +70,42 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   const collected = new Map();
   const errors = {};
 
+  function absorb(item, label) {
+    if (!item.title || !item.link) return;
+
+    // Feeds answer loosely; keep only what is about clothes.
+    if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) return;
+
+    const key = dedupeKey(item);
+    const existing = collected.get(key);
+    if (existing) {
+      existing.outletCount += 1;
+      existing.matchedQueries.add(label);
+      // A copy that arrived with its photo beats one that did not.
+      if (!existing.feedImage && item.feedImage) {
+        existing.feedImage = item.feedImage;
+        existing.link = item.link;
+      }
+      return;
+    }
+    collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([label]) });
+  }
+
+  // Publisher feeds first: they hand over the real article URL and the photo
+  // inline, where Google News gives a relay link that has to be unwrapped and
+  // a page that often blocks us.
+  try {
+    const direct = await searchPublisherFeeds(star.name || star.keyword);
+    for (const item of direct.items) absorb(item, 'flux éditeur');
+    Object.assign(errors, direct.errors);
+  } catch (err) {
+    errors.publisherFeeds = err.message || String(err);
+  }
+
   for (const query of queries) {
     try {
       const items = await searchNews(query, { geo, hl });
-      for (const item of items) {
-        if (!item.title || !item.link) continue;
-
-        // The feed answers the query loosely; keep only what is about clothes.
-        const haystack = `${item.title} ${item.snippet || ''}`;
-        if (!isFashionQuery(haystack)) continue;
-
-        const key = dedupeKey(item);
-        const existing = collected.get(key);
-        if (existing) {
-          existing.outletCount += 1;
-          existing.matchedQueries.add(query);
-          continue;
-        }
-        collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([query]) });
-      }
+      for (const item of items) absorb(item, query);
     } catch (err) {
       errors[`news:${query}`] = err.message || String(err);
     }

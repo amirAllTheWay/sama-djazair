@@ -77,15 +77,80 @@ function tagContent(xml, tag) {
   return decodeEntities(match[1].replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '')).trim();
 }
 
+// Publisher feeds carry the photo inline, under whichever of these tags their
+// CMS emits. Reading it here avoids a request and survives sites that block us.
+function feedImage(item) {
+  const patterns = [
+    /<media:content[^>]+url=["']([^"']+)["']/i,
+    /<media:thumbnail[^>]+url=["']([^"']+)["']/i,
+    /<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i,
+    /<enclosure[^>]+type=["']image[^>]*url=["']([^"']+)["']/i,
+    /<image[^>]*>\s*<url>([^<]+)<\/url>/i,
+    /<img[^>]+src=["']([^"']+)["']/i,
+  ];
+  // Some feeds ship the photo as an <img> inside an entity-escaped
+  // description, so the raw item has to be decoded before it can be matched.
+  for (const haystack of [item, decodeEntities(item)]) {
+    for (const pattern of patterns) {
+      const match = haystack.match(pattern);
+      if (match) return decodeEntities(match[1]);
+    }
+  }
+  return null;
+}
+
 function parseRssItems(xml) {
-  const items = xml.match(/<item>[\s\S]*?<\/item>/gi) || [];
+  const items = xml.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
   return items.map((item) => ({
     title: tagContent(item, 'title'),
     link: tagContent(item, 'link'),
-    publishedAt: tagContent(item, 'pubDate'),
+    publishedAt: tagContent(item, 'pubDate') || tagContent(item, 'dc:date'),
     source: tagContent(item, 'source') || null,
     snippet: stripTags(tagContent(item, 'description')).slice(0, 400),
+    feedImage: feedImage(item),
   }));
+}
+
+// Fashion and menswear titles that cover red carpet and street style, chosen
+// because their feeds carry both the real article URL and an inline image —
+// neither of which Google News relay links reliably give up any more.
+const PUBLISHER_FEEDS = [
+  { name: 'GQ', url: 'https://www.gq.com/feed/rss' },
+  { name: 'Vogue', url: 'https://www.vogue.com/feed/rss' },
+  { name: 'Who What Wear', url: 'https://www.whowhatwear.com/rss' },
+  { name: "Harper's Bazaar", url: 'https://www.harpersbazaar.com/rss/all.xml/' },
+  { name: 'Elle', url: 'https://www.elle.com/rss/all.xml/' },
+  { name: 'Esquire', url: 'https://www.esquire.com/rss/all.xml/' },
+  { name: 'Hypebeast', url: 'https://hypebeast.com/feed' },
+  { name: 'WWD', url: 'https://wwd.com/feed/' },
+  { name: 'Footwear News', url: 'https://footwearnews.com/feed/' },
+];
+
+// Scans publisher feeds for a name instead of asking Google for it. Slower to
+// discover new outlets, but every hit arrives complete.
+async function searchPublisherFeeds(name, { limit = 20 } = {}) {
+  const needle = name.toLowerCase();
+  const found = [];
+  const errors = {};
+
+  const results = await Promise.all(
+    PUBLISHER_FEEDS.map(async (feed) => {
+      try {
+        const { statusCode, body } = await fetchUrl(feed.url, { maxBytes: 900_000 });
+        if (statusCode !== 200 || !body) return [];
+        return parseRssItems(body)
+          .filter((item) => `${item.title} ${item.snippet}`.toLowerCase().includes(needle))
+          .map((item) => ({ ...item, source: item.source || feed.name }));
+      } catch (err) {
+        errors[`feed:${feed.name}`] = err.message || String(err);
+        return [];
+      }
+    })
+  );
+
+  for (const items of results) found.push(...items);
+  found.sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0));
+  return { items: found.slice(0, limit), errors };
 }
 
 async function searchNews(query, { geo = 'US', hl = 'en-US', limit = 20 } = {}) {
@@ -179,7 +244,12 @@ async function resolvePublisherUrl(link) {
 }
 
 async function enrichArticle(article) {
-  const enriched = { ...article, image: null, summary: article.snippet || null, url: article.link };
+  const enriched = {
+    ...article,
+    image: article.feedImage || null,
+    summary: article.snippet || null,
+    url: article.link,
+  };
 
   try {
     const resolved = await resolvePublisherUrl(article.link);
@@ -195,7 +265,8 @@ async function enrichArticle(article) {
     }
     if (!html) return enriched;
 
-    enriched.image = metaContent(html, ['og:image', 'twitter:image', 'twitter:image:src']);
+    enriched.image =
+      enriched.image || metaContent(html, ['og:image', 'twitter:image', 'twitter:image:src']);
     enriched.summary =
       metaContent(html, ['og:description', 'twitter:description', 'description']) || enriched.summary;
     enriched.source = metaContent(html, ['og:site_name']) || enriched.source;
@@ -219,6 +290,8 @@ async function enrichArticle(article) {
 
 module.exports = {
   searchNews,
+  searchPublisherFeeds,
+  PUBLISHER_FEEDS,
   enrichArticle,
   fetchUrl,
   stripTags,
