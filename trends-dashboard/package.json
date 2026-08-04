@@ -1,7 +1,7 @@
 {
   "name": "trends-dashboard",
   "version": "1.0.0",
-  "description": "Dashboard tracking celebrity fashion trends, polling Google Trends on demand via a refresh button.",
+  "description": "Dashboard of press coverage of celebrity outfits, one column per star.",
   "main": "server.js",
   "engines": {
     "node": ">=18"
@@ -9,9 +9,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node scripts/dev.js",
-    "fetch:once": "node scripts/fetch-once.js",
-    "diagnose": "node scripts/diagnose.js",
-    "find-category": "node scripts/find-category.js"
+    "fetch:once": "node scripts/fetch-once.js"
   },
   "dependencies": {
     "express": "^4.19.2"

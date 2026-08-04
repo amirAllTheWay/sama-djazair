@@ -14,6 +14,10 @@ const CANDIDATES_TO_ENRICH = 10;
 const ENRICH_CONCURRENCY = 4;
 const RECENT_WINDOW_DAYS = 60;
 
+// Coverage is read from the US press, matching the market being tracked.
+const DEFAULT_GEO = 'US';
+const DEFAULT_HL = 'en-US';
+
 function defaultArticleQueries(keyword) {
   return [`${keyword} outfit`, `${keyword} style`, `${keyword} wore`, `${keyword} red carpet`];
 }
@@ -61,7 +65,7 @@ async function mapWithConcurrency(items, limit, worker) {
   return results;
 }
 
-async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
+async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = {}) {
   const queries = star.articleQueries || defaultArticleQueries(star.keyword);
   const collected = new Map();
   const errors = {};
@@ -120,4 +124,4 @@ async function fetchStarArticles(star, { geo = 'US', hl = 'en-US' } = {}) {
   return { articles: articles.slice(0, MAX_ARTICLES), errors };
 }
 
-module.exports = { fetchStarArticles, defaultArticleQueries };
+module.exports = { fetchStarArticles, defaultArticleQueries, DEFAULT_GEO, DEFAULT_HL };

@@ -2,8 +2,7 @@ const path = require('path');
 const express = require('express');
 
 const { runFetchCycle } = require('./lib/runFetchCycle');
-const { readLatest, readHistory, loadStars } = require('./lib/store');
-const { diagnose } = require('./lib/diagnose');
+const { readLatest, loadStars } = require('./lib/store');
 
 const PORT = process.env.PORT || 3000;
 const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MS || 30_000);
@@ -22,26 +21,12 @@ app.get('/api/version', (req, res) => {
   res.json({ bootId: BOOT_ID });
 });
 
-app.get('/api/trends', (req, res) => {
+app.get('/api/articles', (req, res) => {
   res.json(readLatest());
-});
-
-app.get('/api/trends/:slug/history', (req, res) => {
-  res.json(readHistory(req.params.slug));
 });
 
 app.get('/api/stars', (req, res) => {
   res.json(loadStars());
-});
-
-// Raw view of what Google actually returns at each step, so a failure can be
-// read directly instead of inferred from a parsed error message.
-app.get('/api/diagnostics', async (req, res) => {
-  try {
-    res.json(await diagnose());
-  } catch (err) {
-    res.status(500).json({ error: err.message || String(err) });
-  }
 });
 
 app.post('/api/refresh', async (req, res) => {
@@ -54,14 +39,14 @@ app.post('/api/refresh', async (req, res) => {
     const waitMs = REFRESH_COOLDOWN_MS - sinceLast;
     return res.status(429).json({
       ok: false,
-      message: `Merci d'attendre encore ${Math.ceil(waitMs / 1000)}s avant de relancer (évite de se faire bloquer par Google Trends).`,
+      message: `Merci d'attendre encore ${Math.ceil(waitMs / 1000)}s avant de relancer.`,
     });
   }
 
   lastRefreshAt = Date.now();
   refreshInFlight = runFetchCycle()
     .catch((err) => {
-      console.error('[trends] refresh failed:', err);
+      console.error('[articles] refresh failed:', err);
       throw err;
     })
     .finally(() => {
@@ -78,5 +63,5 @@ app.post('/api/refresh', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[server] listening on port ${PORT}`);
-  console.log('[trends] no automatic polling — waiting for a manual refresh from the dashboard');
+  console.log('[articles] no automatic polling — waiting for a manual refresh from the dashboard');
 });
