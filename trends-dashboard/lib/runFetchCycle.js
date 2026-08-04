@@ -37,7 +37,8 @@ async function runFetchCycle() {
     );
     for (const article of entry.articles) {
       const look = article.garments.length ? article.garments.join(' · ') : 'look non identifié';
-      console.log(`[articles]   · ${article.source || '?'} — ${look}`);
+      console.log(`[articles]   ${article.image ? '📷' : '——'} ${article.source || '?'} — ${look}`);
+      if (!article.image) console.log(`[articles]      (pas de photo) ${article.url}`);
     }
     for (const [step, message] of Object.entries(entry.errors)) {
       console.warn(`[articles]   ✗ ${step}: ${message}`);

@@ -104,6 +104,49 @@ async function searchNews(query, { geo = 'US', hl = 'en-US', limit = 20 } = {}) 
   return parseRssItems(body).slice(0, limit);
 }
 
+// Google News links are relay stubs. They used to answer with a 302 to the
+// publisher; now they serve an HTML page that redirects with JavaScript, so
+// following the link lands on Google's own markup — no publisher photo, no
+// publisher summary. Three ways out, cheapest first.
+
+// 1. The real URL is encoded in the path. Decoding the base64 gives a protobuf
+//    blob whose only readable http(s) run is the article address.
+function decodeRelayPath(link) {
+  const match = link.match(/\/articles\/([A-Za-z0-9_-]{16,})/);
+  if (!match) return null;
+  try {
+    const decoded = Buffer.from(match[1], 'base64').toString('latin1');
+    const url = decoded.match(/https?:\/\/[^\s\x00-\x1f"'<>]+/);
+    if (!url) return null;
+    const candidate = url[0];
+    return candidate.includes('news.google.com') ? null : candidate;
+  } catch {
+    return null;
+  }
+}
+
+// 2. Failing that, the interstitial itself names the destination.
+function extractFromInterstitial(html) {
+  const patterns = [
+    /data-n-au="([^"]+)"/,
+    /<c-wiz[^>]+data-p="[^"]*?(https?:\/\/[^\s"\\]+)/,
+    /url=(https?:\/\/[^"'&<>]+)/,
+    /<a[^>]+href="(https?:\/\/(?!(?:news|www|accounts|policies|support)\.google\.com)[^"]+)"/,
+  ];
+  for (const pattern of patterns) {
+    const match = html.match(pattern);
+    if (match) {
+      const candidate = decodeEntities(match[1]);
+      if (!candidate.includes('google.com')) return candidate;
+    }
+  }
+  return null;
+}
+
+function isRelay(url) {
+  return /(^|\/\/)news\.google\.com/.test(url);
+}
+
 function metaContent(html, patterns) {
   for (const pattern of patterns) {
     // Attribute order varies by CMS, so match content= on either side of the key.
@@ -119,25 +162,53 @@ function metaContent(html, patterns) {
   return null;
 }
 
-// Google News links are redirect stubs; following them yields the publisher's
-// page, whose OpenGraph tags carry the photo and the editor-written summary.
+// Resolve a relay link to the publisher's page, whose OpenGraph tags carry the
+// photo and the editor-written summary.
+async function resolvePublisherUrl(link) {
+  if (!isRelay(link)) return { url: link, html: null };
+
+  const decoded = decodeRelayPath(link);
+  if (decoded) return { url: decoded, html: null };
+
+  // 3. Last resort: load the interstitial and read the destination out of it.
+  const { body, finalUrl } = await fetchUrl(link, { maxBytes: MAX_HTML_BYTES });
+  if (finalUrl && !isRelay(finalUrl)) return { url: finalUrl, html: body };
+
+  const extracted = body ? extractFromInterstitial(body) : null;
+  return extracted ? { url: extracted, html: null } : { url: link, html: null };
+}
+
 async function enrichArticle(article) {
   const enriched = { ...article, image: null, summary: article.snippet || null, url: article.link };
 
   try {
-    const { statusCode, body, finalUrl } = await fetchUrl(article.link, { maxBytes: MAX_HTML_BYTES });
-    if (statusCode !== 200 || !body) return enriched;
+    const resolved = await resolvePublisherUrl(article.link);
+    enriched.url = resolved.url;
 
-    enriched.url = finalUrl;
-    enriched.image = metaContent(body, ['og:image', 'twitter:image', 'twitter:image:src']);
+    let html = resolved.html;
+    if (!html) {
+      const page = await fetchUrl(resolved.url, { maxBytes: MAX_HTML_BYTES });
+      if (page.statusCode === 200) {
+        html = page.body;
+        enriched.url = page.finalUrl;
+      }
+    }
+    if (!html) return enriched;
+
+    enriched.image = metaContent(html, ['og:image', 'twitter:image', 'twitter:image:src']);
     enriched.summary =
-      metaContent(body, ['og:description', 'twitter:description', 'description']) || enriched.summary;
-    enriched.source = metaContent(body, ['og:site_name']) || enriched.source;
+      metaContent(html, ['og:description', 'twitter:description', 'description']) || enriched.summary;
+    enriched.source = metaContent(html, ['og:site_name']) || enriched.source;
 
     try {
-      enriched.domain = new URL(finalUrl).hostname.replace(/^www\./, '');
+      const parsed = new URL(enriched.url);
+      enriched.domain = parsed.hostname.replace(/^www\./, '');
+      // Publishers often give og:image as a site-relative path.
+      if (enriched.image && !/^https?:/i.test(enriched.image)) {
+        enriched.image = new URL(enriched.image, parsed.origin).toString();
+      }
     } catch {
-      /* finalUrl already validated upstream; leave domain unset */
+      /* leave domain unset rather than fail the article */
     }
   } catch {
     // A publisher blocking us costs the photo, not the article — keep the RSS data.
@@ -146,4 +217,12 @@ async function enrichArticle(article) {
   return enriched;
 }
 
-module.exports = { searchNews, enrichArticle, fetchUrl, stripTags, decodeEntities };
+module.exports = {
+  searchNews,
+  enrichArticle,
+  fetchUrl,
+  stripTags,
+  decodeEntities,
+  decodeRelayPath,
+  extractFromInterstitial,
+};
