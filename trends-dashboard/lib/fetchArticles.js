@@ -1,4 +1,6 @@
 const { searchNews, enrichArticle } = require('./newsClient');
+const { searchWeb, parseRelativeDate } = require('./googleSearch');
+const { isAvailable: browserAvailable } = require('./browserResolver');
 const {
   detectBrands,
   detectOccasions,
@@ -19,8 +21,16 @@ const RECENT_WINDOW_DAYS = 60;
 const DEFAULT_GEO = 'US';
 const DEFAULT_HL = 'en-US';
 
+// Aimed at what is being written about the style rather than at appearances
+// alone: "style file" and "fashion" surface trend and analysis pieces that
+// "wore" and "red carpet" never reach.
 function defaultArticleQueries(keyword) {
-  return [`${keyword} outfit`, `${keyword} style`, `${keyword} wore`, `${keyword} red carpet`];
+  return [
+    `${keyword} outfit`,
+    `${keyword} style`,
+    `${keyword} fashion trend`,
+    `${keyword} best looks`,
+  ];
 }
 
 function dedupeKey(article) {
@@ -90,9 +100,29 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([label]) });
   }
 
-  // Google News is the only source: its editorial selection proved the most
-  // relevant, and the browser resolver now reaches the publisher pages its
-  // relay links hide, so choosing it no longer costs the photos.
+  // Google web search first. The news feed only indexes registered news
+  // outlets, which leaves out the fashion blogs and trend pieces that carry
+  // most of the style coverage — the gap between what this board found and
+  // what searching Google by hand turns up. Results also arrive as publisher
+  // URLs, with no relay to unwrap.
+  if (browserAvailable()) {
+    for (const query of queries) {
+      try {
+        const results = await searchWeb(query, { recency: star.recency || 'month' });
+        for (const item of results || []) {
+          absorb(
+            { ...item, publishedAt: parseRelativeDate(item.published), source: null },
+            query
+          );
+        }
+      } catch (err) {
+        errors[`google:${query}`] = err.message || String(err);
+      }
+    }
+  }
+
+  // The news feed still catches wire stories and syndication the web index
+  // ranks too low to show, and it costs one cheap request per query.
   for (const query of queries) {
     try {
       for (const item of await searchNews(query, { geo, hl })) absorb(item, query);

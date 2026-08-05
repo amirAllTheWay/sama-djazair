@@ -85,7 +85,9 @@ function metaFrom(html, keys) {
 
 // Opens the link, lets the redirect run, and reads the article page it lands
 // on. Returns null when the browser is unavailable so callers can fall back.
-async function resolveInBrowser(url) {
+// Every browser task wants the same setup — own context, no images or fonts,
+// guaranteed teardown — so it lives here once.
+async function withPage(task) {
   const browser = await getBrowser();
   if (!browser) return null;
 
@@ -93,17 +95,26 @@ async function resolveInBrowser(url) {
   const context = await browser.newContext({
     locale: 'en-US',
     viewport: { width: 1280, height: 900 },
+    userAgent:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
   });
 
   try {
     const page = await context.newPage();
-    // Images and fonts are never read here; skipping them cuts page time a lot.
+    // Images and fonts are never read; skipping them cuts page time a lot.
     await page.route('**/*', (route) =>
       ['image', 'media', 'font'].includes(route.request().resourceType())
         ? route.abort()
         : route.continue()
     );
+    return await task(page);
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
 
+async function resolveInBrowser(url) {
+  return withPage(async (page) => {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
     // The relay page redirects via script; wait for the URL to leave Google.
@@ -125,9 +136,7 @@ async function resolveInBrowser(url) {
       summary: metaFrom(html, ['og:description', 'twitter:description', 'description']),
       source: metaFrom(html, ['og:site_name']),
     };
-  } finally {
-    await context.close().catch(() => {});
-  }
+  });
 }
 
-module.exports = { resolveInBrowser, closeBrowser, isAvailable };
+module.exports = { resolveInBrowser, withPage, closeBrowser, isAvailable };

@@ -6,6 +6,7 @@
 //   npm run diagnose -- "Timothee Chalamet"
 
 const { searchNews, enrichArticle, takeBrowserError } = require('../lib/newsClient');
+const { searchWeb } = require('../lib/googleSearch');
 const { isAvailable, closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
 const { loadStars } = require('../lib/store');
@@ -27,16 +28,36 @@ function truncate(value, length = 70) {
           '  Installe-le : npm install && npx playwright install chromium'
   );
 
-  let items;
+  const query = `${name} style`;
+  let items = [];
+
+  if (isAvailable()) {
+    console.log(`\n— Recherche Google (web), « ${query} », dernier mois`);
+    try {
+      const web = (await searchWeb(query, { recency: 'month' })) || [];
+      console.log(`  ${web.length} résultats`);
+      for (const item of web.slice(0, 5)) {
+        console.log(`   · ${truncate(item.title, 58)}`);
+        console.log(`     ${truncate(item.link, 62)}  [${item.published || 'date inconnue'}]`);
+      }
+      items = items.concat(web);
+    } catch (err) {
+      console.log(`  échec — ${err.message}`);
+    }
+  }
+
+  console.log('\n— Google News (RSS)');
   try {
-    items = await searchNews(`${name} outfit`, {});
+    const news = await searchNews(query, {});
+    console.log(`  ${news.length} résultats`);
+    items = items.concat(news);
   } catch (err) {
-    console.log(`\nGoogle News a échoué — ${err.message}\n`);
-    return;
+    console.log(`  échec — ${err.message}`);
   }
 
   const relevant = items.filter((item) => isFashionQuery(`${item.title} ${item.snippet || ''}`));
-  console.log(`\n${items.length} résultats, dont ${relevant.length} sur la mode.\n`);
+  console.log(`\n${items.length} résultats au total, dont ${relevant.length} sur la mode.\n`);
+  if (!relevant.length) return;
 
   let withPhoto = 0;
   for (const item of relevant.slice(0, 4)) {
