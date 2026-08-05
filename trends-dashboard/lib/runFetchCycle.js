@@ -33,6 +33,7 @@ async function runFetchCycle() {
       entry.articles = news.articles;
       entry.excluded = news.excluded;
       entry.dead = news.dead;
+      entry.windows = news.windows;
       Object.assign(entry.errors, news.errors);
     } catch (err) {
       entry.errors.articles = err.message || String(err);
@@ -49,7 +50,8 @@ async function runFetchCycle() {
       `[articles] ${star.slug} — ${entry.articles.length} article(s), ${illustrated} avec photo` +
         (entry.excluded ? `, ${entry.excluded} hors presse écarté(s)` : '') +
         (entry.dead ? `, ${entry.dead} lien(s) mort(s) retiré(s)` : '') +
-        (relayed ? `, ${relayed} lien(s) Google non résolu(s)` : '')
+        (relayed ? `, ${relayed} lien(s) Google non résolu(s)` : '') +
+        (entry.windows?.length > 1 ? `  [fenêtre élargie : ${entry.windows.join(' → ')}]` : '')
     );
     for (const article of entry.articles) {
       const look = article.garments.length ? article.garments.join(' · ') : 'look non identifié';

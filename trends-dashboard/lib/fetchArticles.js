@@ -13,9 +13,17 @@ const {
 // the best of a real field. Each one costs a browser navigation, which is what
 // bounds the pool.
 const MAX_ARTICLES = 5;
-const CANDIDATES_TO_ENRICH = 10;
+const CANDIDATES_TO_ENRICH = 16;
 const ENRICH_CONCURRENCY = 4;
 const RECENT_WINDOW_DAYS = 45;
+
+// Enough survivors to still fill five cards after dead links and pages that
+// yield no photo are dropped.
+const POOL_TARGET = 12;
+
+// Widened in order until the pool is deep enough; `null` drops the date filter
+// altogether.
+const RECENCY_LADDER = ['day', 'week', 'month', 'year', null];
 
 // Searches run against the US market, matching the audience being tracked.
 const DEFAULT_GEO = 'US';
@@ -116,23 +124,43 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   const source = activeSource();
   if (!source) return { articles: [], errors: { source: describeSetup() } };
 
-  for (const query of queries) {
-    try {
-      const results = (await source.searchWeb(query, { recency: star.recency || 'month' })) || [];
-      for (const item of results) {
-        absorb(
-          {
-            ...item,
-            // The browser scraper only knows "3 days ago"; the APIs return a date.
-            publishedAt: item.publishedAt ?? parseRelativeDate(item.published),
-            source: null,
-          },
-          query
-        );
+  async function runQueries(recency) {
+    for (const query of queries) {
+      try {
+        const results = (await source.searchWeb(query, { recency })) || [];
+        for (const item of results) {
+          absorb(
+            {
+              ...item,
+              // The browser scraper only knows "3 days ago"; the APIs return a date.
+              publishedAt: item.publishedAt ?? parseRelativeDate(item.published),
+              source: null,
+            },
+            query
+          );
+        }
+      } catch (err) {
+        errors[`${source.id}:${query}`] = err.message || String(err);
       }
-    } catch (err) {
-      errors[`${source.id}:${query}`] = err.message || String(err);
     }
+  }
+
+  // The four queries are variations on one name, so Google returns largely the
+  // same stories: forty raw results collapse to a dozen. Add the press and
+  // fashion filters and a one-month window, and the pool can fall below the
+  // five cards the dashboard has room for. Widening the window is what refills
+  // it — an older piece shown is better than an empty column, and recency
+  // still governs the ranking, so fresh articles keep their place at the top.
+  // An unrecognised `recency` would otherwise slice from -1 and start with no
+  // date filter at all — the widest window rather than the intended one.
+  const start = RECENCY_LADDER.indexOf(star.recency || 'month');
+  const ladder = RECENCY_LADDER.slice(start === -1 ? RECENCY_LADDER.indexOf('month') : start);
+  const windowsUsed = [];
+
+  for (const recency of ladder) {
+    windowsUsed.push(recency ?? 'sans limite');
+    await runQueries(recency);
+    if (collected.size >= POOL_TARGET) break;
   }
 
   // Enrich by Google's own ordering: the pages it ranks highest are the ones
@@ -169,7 +197,13 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   for (const article of articles) article.score = relevanceScore(article);
   articles.sort((a, b) => b.score - a.score);
 
-  return { articles: articles.slice(0, MAX_ARTICLES), errors, excluded, dead };
+  return {
+    articles: articles.slice(0, MAX_ARTICLES),
+    errors,
+    excluded,
+    dead,
+    windows: windowsUsed,
+  };
 }
 
 module.exports = { fetchStarArticles, defaultArticleQueries, DEFAULT_GEO, DEFAULT_HL };

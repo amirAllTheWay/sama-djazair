@@ -9,7 +9,10 @@
 const https = require('https');
 
 const ENDPOINT = 'https://google.serper.dev/search';
-const RESULTS_PER_QUERY = 10;
+// The queries are variations on one name and return overlapping stories, so a
+// page of ten leaves too few distinct articles once filtering has run. Serper
+// bills per search, not per result, so a wider page is free.
+const RESULTS_PER_QUERY = 20;
 
 // Serper passes tbs straight through to Google, so the windows match the ones
 // the browser scraper used.

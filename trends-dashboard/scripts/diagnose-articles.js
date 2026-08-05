@@ -117,6 +117,7 @@ function truncate(value, length = 66) {
     console.log(
       `   lien    : ${enriched.dead ? '✗ MORT (404) — retiré du dashboard' : '✓ ouvrable'}`
     );
+    console.log(`   url     : ${enriched.url}`);
     if (item.queries > 1) console.log(`   trouvé par ${item.queries} requêtes différentes`);
     console.log('');
   }

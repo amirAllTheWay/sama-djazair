@@ -59,6 +59,29 @@ Le filtre s'applique dans `fetchArticles.js`, là où toutes les sources
 convergent : il vaut donc pour Serper, Custom Search et le navigateur.
 `npm run diagnose` affiche le nombre d'écartés et les domaines concernés.
 
+S'y ajoutent les **liens morts** : une requête `HEAD` vérifie que la page
+existe encore, et un `404` ou `410` retire l'article. Une carte dont le lien
+ne s'ouvre pas est pire que pas de carte — elle paraît exploitable jusqu'au
+clic. Un `403` ne compte pas : beaucoup d'éditeurs refusent les robots alors
+que la page s'ouvre normalement dans un navigateur.
+
+## Remplir les cinq cartes
+
+Les quatre requêtes sont des variantes d'un même nom, donc Google renvoie
+largement les mêmes articles : une quarantaine de résultats bruts retombe à
+une douzaine après dédoublonnage. Ajoutés le filtre presse, le filtre mode et
+une fenêtre d'un mois, le vivier peut descendre sous les cinq cartes que le
+dashboard peut afficher.
+
+La fenêtre s'élargit donc d'elle-même — `month` → `year` → sans limite —
+jusqu'à ce qu'il y ait de quoi remplir. Un article un peu plus ancien vaut
+mieux qu'une colonne à moitié vide, et la récence continue de peser dans le
+classement : les articles frais gardent leur place en tête. Le `recency` de
+`config/stars.json` fixe seulement le point de départ.
+
+Aucune recherche supplémentaire n'est lancée quand le vivier est déjà
+suffisant. Le log de refresh signale l'élargissement quand il a lieu.
+
 ## Lancer en local
 
 ```bash
