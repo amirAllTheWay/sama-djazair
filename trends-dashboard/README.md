@@ -9,30 +9,37 @@ en faire un contenu.
 
 Au clic sur **Actualiser**, pour chaque star de `config/stars.json` :
 
-1. Interroge Google News RSS sur plusieurs requêtes orientées tenue
-   (`articleQueries`, par défaut « outfit », « style », « wore »,
-   « red carpet »).
+1. Tape chaque requête de `articleQueries` dans **le moteur de recherche
+   Google**, via un vrai navigateur, avec le filtre de récence de Google
+   (`recency`, « month » par défaut).
 2. Ne garde que les résultats qui parlent de vêtements, via le vocabulaire mode
-   de `lib/fashionVocabulary.js`.
-3. Dédoublonne sur le titre : un sujet syndiqué garde son titre, pas son URL.
-   Le nombre de médias l'ayant repris est conservé.
-4. Résout chaque lien relais jusqu'à la page de l'éditeur, puis y lit les
-   métadonnées OpenGraph — photo de partage et résumé rédactionnel.
+   de `lib/fashionVocabulary.js`, et écarte les agrégateurs, YouTube et les
+   réseaux sociaux.
+3. Dédoublonne sur le titre. Un article trouvé par plusieurs requêtes conserve
+   son meilleur rang — sa pertinence est plus large.
+4. Ouvre les mieux classés dans le navigateur et lit leurs métadonnées
+   OpenGraph : photo de partage et résumé rédactionnel.
 5. Extrait les pièces, les maisons et l'occasion depuis le titre et le résumé.
-6. Classe, et garde les 4 meilleurs.
+6. Classe, et garde les 5 meilleurs.
 
-Google News est la seule source. Bing et les flux RSS des magazines ont été
-utilisés un temps pour contourner les liens relais ; la résolution par
-navigateur les rend inutiles, et la sélection éditoriale de Google s'est
-révélée plus pertinente.
+La recherche Google est la seule source. Google News RSS, Bing et les flux RSS
+des magazines ont été essayés : le premier n'indexe que les éditeurs
+enregistrés comme médias et laisse de côté les blogs mode et les articles de
+tendance, les autres n'existaient que pour contourner des liens relais que le
+navigateur résout désormais.
 
 ## Sur le classement
 
-Les compteurs de partages n'ont plus d'API publique (Facebook a fermé la
-sienne, X aussi). « Les plus partagés » est donc approximé par la **reprise
-médiatique** — combien de médias différents ont couvert le même sujet —
-pondérée par la récence. La carte affiche « repris ×N » pour que l'indicateur
-soit lisible plutôt que sous-entendu.
+Aucun compteur de partages n'a plus d'API publique — Facebook a fermé la
+sienne, X aussi. Le signal d'engagement utilisé est donc **le rang Google
+lui-même**, qui intègre déjà l'autorité du site, les liens entrants et le
+comportement de clic. Un article bien classé sur plusieurs requêtes différentes
+pèse davantage. Le badge « top N Google » sur la carte rend ce critère lisible
+plutôt que de le laisser implicite.
+
+S'y ajoutent la récence (fenêtre de 45 jours) et la présence d'une photo, qui
+compte lourd : sans image, la carte ne répond pas à la question pour laquelle
+le tableau existe.
 
 ## Lancer en local
 
@@ -84,13 +91,12 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`)
 
-## Photos des articles Google News
+## Le navigateur est requis
 
-Google News ne publie plus l'adresse de l'article : ses liens portent un
-identifiant opaque et redirigent en JavaScript. Aucune requête HTTP simple ne
-peut donc atteindre la page de l'éditeur, où se trouve la photo. Un vrai
-navigateur, lui, exécute ce script — et, étant un vrai navigateur, passe aussi
-les `403` que plusieurs éditeurs opposent aux clients non-navigateurs.
+La recherche Google n'a pas d'API gratuite, et sa page de résultats est rendue
+en JavaScript : seul un vrai navigateur peut la lire. Il sert aussi à ouvrir
+les articles pour y prendre la photo, ce qui règle au passage les `403` que
+plusieurs éditeurs opposent aux clients non-navigateurs.
 
 Playwright est déclaré en dépendance optionnelle. Il reste à installer Chromium
 une fois :
@@ -104,8 +110,11 @@ Si Chrome est déjà sur la machine, renseigne `CHROMIUM_PATH` dans `.env` pour
 articles Google s'affichent sans photo, et le terminal le rappelle au début de
 chaque collecte.
 
-Compter environ 3 à 5 secondes par lien Google résolu. Les articles Bing et les
-flux éditeurs n'en ont pas besoin.
+Le navigateur n'est plus optionnel : la recherche Google passe par lui. Sans
+Playwright, la collecte s'arrête et le dashboard le dit explicitement.
+
+Compter environ 30 à 60 secondes par collecte — quatre recherches, puis une
+ouverture de page par article retenu.
 
 ## Créer un article depuis une carte
 

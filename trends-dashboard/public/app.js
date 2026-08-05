@@ -75,11 +75,13 @@ function articleCard(article) {
   const date = document.createElement('span');
   date.textContent = formatArticleDate(article.publishedAt);
   meta.appendChild(date);
-  if (article.outletCount > 1) {
-    const pickup = document.createElement('span');
-    pickup.className = 'article-pickup';
-    pickup.textContent = `repris ×${article.outletCount}`;
-    meta.appendChild(pickup);
+  // Google's own position is the relevance signal behind the ordering, so the
+  // top few say why they are at the top rather than leaving it implicit.
+  if (article.bestRank && article.bestRank <= 3) {
+    const rank = document.createElement('span');
+    rank.className = 'article-pickup';
+    rank.textContent = `top ${article.bestRank} Google`;
+    meta.appendChild(rank);
   }
   content.appendChild(meta);
 

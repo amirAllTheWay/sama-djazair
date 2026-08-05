@@ -114,7 +114,10 @@ async function searchWeb(query, { recency = 'month' } = {}) {
             if (!snippet) snippet = lines.sort((a, b) => b.length - a.length)[0] || '';
           }
 
-          out.push({ title, link: href, snippet, published });
+          // Position is the one engagement signal available: Google ranks on
+          // authority, links and click behaviour, none of which has a public
+          // API of its own.
+          out.push({ title, link: href, snippet, published, rank: out.length + 1 });
           if (out.length >= max) break;
         }
 

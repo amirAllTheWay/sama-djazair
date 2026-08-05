@@ -1,4 +1,4 @@
-const { searchNews, enrichArticle } = require('./newsClient');
+const { enrichArticle } = require('./newsClient');
 const { searchWeb, parseRelativeDate } = require('./googleSearch');
 const { isAvailable: browserAvailable } = require('./browserResolver');
 const {
@@ -8,22 +8,21 @@ const {
   isFashionQuery,
 } = require('./fashionVocabulary');
 
-// More candidates are enriched than kept, so the cards shown are the best of a
-// real field rather than whatever happened to be newest. The pool is smaller
-// than it was with several sources: every Google link now costs a browser
-// navigation, so widening it buys little and costs seconds.
-const MAX_ARTICLES = 4;
-const CANDIDATES_TO_ENRICH = 8;
+// Twice as many candidates are enriched as are kept, so the cards shown are
+// the best of a real field. Each one costs a browser navigation, which is what
+// bounds the pool.
+const MAX_ARTICLES = 5;
+const CANDIDATES_TO_ENRICH = 10;
 const ENRICH_CONCURRENCY = 4;
-const RECENT_WINDOW_DAYS = 60;
+const RECENT_WINDOW_DAYS = 45;
 
-// Coverage is read from the US press, matching the market being tracked.
+// Searches run against the US market, matching the audience being tracked.
 const DEFAULT_GEO = 'US';
 const DEFAULT_HL = 'en-US';
 
 // Aimed at what is being written about the style rather than at appearances
-// alone: "style file" and "fashion" surface trend and analysis pieces that
-// "wore" and "red carpet" never reach.
+// alone: "fashion trend" and "best looks" surface analysis pieces that "wore"
+// and "red carpet" never reach.
 function defaultArticleQueries(keyword) {
   return [
     `${keyword} outfit`,
@@ -49,18 +48,19 @@ function ageInDays(publishedAt) {
   return (Date.now() - time) / (1000 * 60 * 60 * 24);
 }
 
-// No public API reports share counts any more, so "most shared" is inferred:
-// a story several outlets picked up travelled further than one nobody else
-// touched, and recency decays that weight. A photo stays a tie-breaker rather
-// than a gate, since resolving a relay link can fail and a story worth knowing
-// about is worth a card either way.
-function buzzScore(article) {
+// Google's ranking already folds in authority, inbound links and click
+// behaviour — the closest thing to an engagement signal that is actually
+// obtainable, since no public API reports shares any more. A story appearing
+// high for several different queries is stronger still. Recency matters
+// because a month-old look is not what a video should be built on, and a photo
+// weighs heavily: without one the card cannot answer the question it exists for.
+function relevanceScore(article) {
   const age = ageInDays(article.publishedAt);
-  const recency = age === null ? 0.3 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
-  const pickup = Math.min(article.outletCount / 4, 1);
-  const illustrated = article.image ? 0.1 : 0;
-  const identified = article.brands.length ? 0.15 : 0;
-  return recency * 0.5 + pickup * 0.35 + illustrated + identified;
+  const recency = age === null ? 0.35 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
+  const position = Math.max(0, 1 - (article.bestRank - 1) / 12);
+  const breadth = Math.min((article.matchedQueries.length - 1) / 2, 1);
+  const illustrated = article.image ? 0.35 : 0;
+  return position * 0.4 + recency * 0.3 + breadth * 0.15 + illustrated;
 }
 
 async function mapWithConcurrency(items, limit, worker) {
@@ -86,53 +86,47 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   function absorb(item, label) {
     if (!item.title || !item.link) return;
 
-    // The feed answers the query loosely; keep only what is about clothes.
+    // Google answers the query loosely; keep only what is about clothes.
     if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) return;
 
     const key = dedupeKey(item);
     const existing = collected.get(key);
     if (existing) {
-      // Same story reached by another query: proof it travelled, not a duplicate.
-      existing.outletCount += 1;
+      // Found again by another query: broader relevance, and the better of the
+      // two positions is the one worth keeping.
       existing.matchedQueries.add(label);
+      existing.bestRank = Math.min(existing.bestRank, item.rank ?? 99);
       return;
     }
-    collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([label]) });
+    collected.set(key, { ...item, bestRank: item.rank ?? 99, matchedQueries: new Set([label]) });
   }
 
-  // Google web search first. The news feed only indexes registered news
-  // outlets, which leaves out the fashion blogs and trend pieces that carry
-  // most of the style coverage — the gap between what this board found and
-  // what searching Google by hand turns up. Results also arrive as publisher
-  // URLs, with no relay to unwrap.
-  if (browserAvailable()) {
-    for (const query of queries) {
-      try {
-        const results = await searchWeb(query, { recency: star.recency || 'month' });
-        for (const item of results || []) {
-          absorb(
-            { ...item, publishedAt: parseRelativeDate(item.published), source: null },
-            query
-          );
-        }
-      } catch (err) {
-        errors[`google:${query}`] = err.message || String(err);
-      }
-    }
+  if (!browserAvailable()) {
+    return {
+      articles: [],
+      errors: {
+        navigateur:
+          "Playwright est requis : la recherche Google passe par un vrai navigateur. " +
+          'Lance « npm install && npx playwright install chromium ».',
+      },
+    };
   }
 
-  // The news feed still catches wire stories and syndication the web index
-  // ranks too low to show, and it costs one cheap request per query.
   for (const query of queries) {
     try {
-      for (const item of await searchNews(query, { geo, hl })) absorb(item, query);
+      const results = await searchWeb(query, { recency: star.recency || 'month' });
+      for (const item of results || []) {
+        absorb({ ...item, publishedAt: parseRelativeDate(item.published), source: null }, query);
+      }
     } catch (err) {
-      errors[`news:${query}`] = err.message || String(err);
+      errors[`google:${query}`] = err.message || String(err);
     }
   }
 
+  // Enrich by Google's own ordering: the pages it ranks highest are the ones
+  // worth spending a browser navigation on.
   const candidates = [...collected.values()]
-    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
+    .sort((a, b) => a.bestRank - b.bestRank)
     .slice(0, CANDIDATES_TO_ENRICH);
 
   const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);
@@ -150,12 +144,12 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
       garments: detectGarments(text),
       brands: detectBrands(text),
       occasions: detectOccasions(text),
-      outletCount: article.outletCount,
+      bestRank: article.bestRank,
       matchedQueries: [...article.matchedQueries],
     };
   });
 
-  for (const article of articles) article.score = buzzScore(article);
+  for (const article of articles) article.score = relevanceScore(article);
   articles.sort((a, b) => b.score - a.score);
 
   return { articles: articles.slice(0, MAX_ARTICLES), errors };
