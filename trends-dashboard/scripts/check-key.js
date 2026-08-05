@@ -36,19 +36,28 @@ function request(url) {
 (async () => {
   console.log('\nVérification des identifiants de recherche\n');
 
-  // Serper first: it is the option that needs no console, so a working key
-  // here makes the Google diagnosis below moot.
+  // Serper first: it is the option that needs no console, and a working key
+  // here means Custom Search is never called, so its state stops mattering.
   console.log(`SERPER_API_KEY : ${mask(process.env.SERPER_API_KEY)}`);
+  let serperWorks = false;
   if (process.env.SERPER_API_KEY) {
     const { searchWeb } = require('../lib/serper');
     try {
       const results = await searchWeb('test', {});
       console.log(`✓ Serper fonctionne — ${results.length} résultats.\n`);
+      serperWorks = true;
     } catch (err) {
       console.log(`✗ Serper : ${err.message}\n`);
     }
   } else {
     console.log('  (une clé sur serper.dev suffit à faire tourner la recherche)\n');
+  }
+
+  if (serperWorks) {
+    console.log('C\'est la source utilisée : la recherche est opérationnelle.');
+    console.log('Rien d\'autre n\'est requis — tu peux supprimer GOOGLE_API_KEY et');
+    console.log('GOOGLE_CSE_ID de .env, Custom Search n\'est plus appelé.\n');
+    return;
   }
 
   console.log(`GOOGLE_API_KEY : ${mask(key)}`);
