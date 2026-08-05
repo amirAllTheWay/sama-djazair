@@ -120,6 +120,14 @@ Deux valeurs à mettre dans `.env` :
 L'ordre compte : une clé créée avant l'activation de l'API existe, mais Google
 refuse ses requêtes par un `403`.
 
+Google renvoie deux `403` différents, qui appellent des corrections opposées —
+le message affiché indique lequel :
+
+| Ce que dit Google | Ce qu'il faut faire |
+|---|---|
+| *…are blocked* | La clé a des **restrictions d'API**. Ouvre la clé par son **nom** dans les identifiants, section « Restrictions relatives aux API », choisis « Ne pas restreindre la clé » ou ajoute Custom Search API. |
+| *has not been used… or it is disabled* | L'API n'est **pas activée** sur ce projet. Vérifie aussi que la clé et l'API sont bien sur le **même** projet. |
+
 L'API renvoie la photo de l'article dans sa réponse, ce qui évite d'ouvrir la
 page : une collecte prend alors quelques secondes.
 

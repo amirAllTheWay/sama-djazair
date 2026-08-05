@@ -81,10 +81,24 @@ function describeApiError(statusCode, json) {
     );
   }
   if (statusCode === 403) {
-    return new Error(
-      `Google a refusé la clé (${reason}). Vérifie que « Custom Search API » est activée ` +
-        'sur le projet et que la clé n\'est pas restreinte à d\'autres API.'
-    );
+    // Google words these two cases differently, and they need opposite fixes,
+    // so the message says which one rather than listing both every time.
+    if (/are blocked/i.test(reason)) {
+      return new Error(
+        'La clé API existe mais interdit Custom Search. Ouvre ' +
+          'console.cloud.google.com/apis/credentials, clique sur le NOM de la clé, ' +
+          "section « Restrictions relatives aux API » : choisis « Ne pas restreindre la clé », " +
+          'ou ajoute « Custom Search API » à la liste autorisée. Puis enregistre.'
+      );
+    }
+    if (/has not been used|is disabled/i.test(reason)) {
+      return new Error(
+        "« Custom Search API » n'est pas activée sur ce projet. Active-la sur " +
+          'console.cloud.google.com/apis/library/customsearch.googleapis.com, ' +
+          'en vérifiant que le projet sélectionné est bien celui de la clé.'
+      );
+    }
+    return new Error(`Google a refusé la clé : ${reason}`);
   }
   return new Error(`API Google Custom Search : ${reason}`);
 }
