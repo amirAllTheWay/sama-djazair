@@ -10,7 +10,8 @@
     "start": "node --env-file-if-exists=.env server.js",
     "dev": "node --env-file-if-exists=.env scripts/dev.js",
     "fetch:once": "node --env-file-if-exists=.env scripts/fetch-once.js",
-    "diagnose": "node --env-file-if-exists=.env scripts/diagnose-articles.js"
+    "diagnose": "node --env-file-if-exists=.env scripts/diagnose-articles.js",
+    "check-key": "node --env-file-if-exists=.env scripts/check-key.js"
   },
   "dependencies": {
     "express": "^4.19.2"
