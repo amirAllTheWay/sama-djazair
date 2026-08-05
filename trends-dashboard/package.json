@@ -14,5 +14,8 @@
   },
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.49.0"
   }
 }

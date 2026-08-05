@@ -1,5 +1,6 @@
 const https = require('https');
 const { URL } = require('url');
+const { resolveInBrowser, isAvailable } = require('./browserResolver');
 
 const USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -295,8 +296,19 @@ async function resolvePublisherUrl(link, title) {
   const extracted = body ? extractFromInterstitial(body) : null;
   if (extracted) return { url: extracted, html: null };
 
-  // 4. The id is opaque and the interstitial gave nothing, so go looking for
-  //    the article by its headline instead.
+  // 4. Nothing static gives the destination up, because the relay page computes
+  //    it in JavaScript. A real browser runs that script — and, being a real
+  //    browser, also gets past publishers that refuse plain HTTP clients.
+  if (isAvailable()) {
+    try {
+      const resolved = await resolveInBrowser(link);
+      if (resolved) return { url: resolved.url, html: null, fromBrowser: resolved };
+    } catch (err) {
+      lastBrowserError = err.message || String(err);
+    }
+  }
+
+  // 5. Last resort: find the article by its headline elsewhere.
   if (title) {
     try {
       const found = await resolveByHeadline(title);
@@ -309,6 +321,15 @@ async function resolvePublisherUrl(link, title) {
   return { url: link, html: null };
 }
 
+// Surfaced in the fetch log so a missing browser is reported as such rather
+// than looking like every publisher happened to block us.
+let lastBrowserError = null;
+const takeBrowserError = () => {
+  const error = lastBrowserError;
+  lastBrowserError = null;
+  return error;
+};
+
 async function enrichArticle(article) {
   const enriched = {
     ...article,
@@ -320,6 +341,25 @@ async function enrichArticle(article) {
   try {
     const resolved = await resolvePublisherUrl(article.link, article.title);
     enriched.url = resolved.url;
+
+    // The browser already loaded the page; re-fetching it would only invite
+    // the 403 the browser just avoided.
+    if (resolved.fromBrowser) {
+      const page = resolved.fromBrowser;
+      enriched.image = enriched.image || page.image;
+      enriched.summary = page.summary || enriched.summary;
+      enriched.source = page.source || enriched.source;
+      try {
+        const parsed = new URL(enriched.url);
+        enriched.domain = parsed.hostname.replace(/^www\./, '');
+        if (enriched.image && !/^https?:/i.test(enriched.image)) {
+          enriched.image = new URL(enriched.image, parsed.origin).toString();
+        }
+      } catch {
+        /* leave domain unset rather than fail the article */
+      }
+      return enriched;
+    }
 
     let html = resolved.html;
     if (!html) {
@@ -355,6 +395,7 @@ async function enrichArticle(article) {
 }
 
 module.exports = {
+  takeBrowserError,
   searchNews,
   searchBingNews,
   resolveByHeadline,

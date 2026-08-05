@@ -79,6 +79,29 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`)
 
+## Photos des articles Google News
+
+Google News ne publie plus l'adresse de l'article : ses liens portent un
+identifiant opaque et redirigent en JavaScript. Aucune requête HTTP simple ne
+peut donc atteindre la page de l'éditeur, où se trouve la photo. Un vrai
+navigateur, lui, exécute ce script — et, étant un vrai navigateur, passe aussi
+les `403` que plusieurs éditeurs opposent aux clients non-navigateurs.
+
+Playwright est déclaré en dépendance optionnelle. Il reste à installer Chromium
+une fois :
+
+```bash
+npx playwright install chromium
+```
+
+Si Chrome est déjà sur la machine, renseigne `CHROMIUM_PATH` dans `.env` pour
+éviter le téléchargement. Sans navigateur disponible, rien ne casse : les
+articles Google s'affichent sans photo, et le terminal le rappelle au début de
+chaque collecte.
+
+Compter environ 3 à 5 secondes par lien Google résolu. Les articles Bing et les
+flux éditeurs n'en ont pas besoin.
+
 ## Créer un article depuis une carte
 
 Chaque carte porte un bouton **Créer un article**. Il produit un brouillon

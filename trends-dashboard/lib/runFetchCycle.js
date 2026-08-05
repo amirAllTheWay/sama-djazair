@@ -1,9 +1,18 @@
 const { fetchStarArticles, DEFAULT_GEO, DEFAULT_HL } = require('./fetchArticles');
 const { loadStars, saveLatest } = require('./store');
+const { takeBrowserError } = require('./newsClient');
+const { closeBrowser, isAvailable } = require('./browserResolver');
 
 async function runFetchCycle() {
   const stars = loadStars();
   const results = [];
+
+  if (!isAvailable()) {
+    console.log(
+      '[articles] Playwright absent — les liens Google News resteront sans photo. ' +
+        'Pour les résoudre : npm install playwright && npx playwright install chromium'
+    );
+  }
 
   for (const star of stars) {
     const entry = {
@@ -42,11 +51,19 @@ async function runFetchCycle() {
       console.log(`[articles]   ${article.image ? '📷' : '——'} ${article.source || '?'} — ${look}`);
       if (!article.image) console.log(`[articles]      (pas de photo) ${article.url}`);
     }
+    const browserError = takeBrowserError();
+    if (browserError) {
+      entry.errors.navigateur = browserError;
+      console.warn(`[articles]   ✗ navigateur: ${browserError}`);
+    }
     for (const [step, message] of Object.entries(entry.errors)) {
+      if (step === 'navigateur') continue;
       console.warn(`[articles]   ✗ ${step}: ${message}`);
     }
   }
 
+  // The shared browser is only worth keeping alive during a cycle.
+  await closeBrowser();
   return results;
 }
 
