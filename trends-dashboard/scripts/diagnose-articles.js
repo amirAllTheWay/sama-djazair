@@ -5,7 +5,8 @@
 //   npm run diagnose
 //   npm run diagnose -- "Timothee Chalamet"
 
-const { searchWeb, parseRelativeDate } = require('../lib/googleSearch');
+const { searchWeb: searchViaApi, isConfigured: apiConfigured } = require('../lib/googleCse');
+const { searchWeb: searchViaBrowser, parseRelativeDate } = require('../lib/googleSearch');
 const { enrichArticle, takeBrowserError } = require('../lib/articlePage');
 const { isAvailable, closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
@@ -25,12 +26,20 @@ function truncate(value, length = 66) {
 (async () => {
   console.log(`\nDiagnostic — « ${name} », fenêtre : ${recency}\n`);
 
-  if (!isAvailable()) {
-    console.log('✗ Playwright absent. La recherche Google passe par un vrai navigateur,');
-    console.log('  il n\'y a donc aucune source sans lui.');
-    console.log('  Installe-le : npm install && npx playwright install chromium\n');
+  const useApi = apiConfigured();
+  if (useApi) {
+    console.log("Source : API Google Custom Search (déployable, sans navigateur).\n");
+  } else if (isAvailable()) {
+    console.log('Source : recherche par navigateur (repli local).');
+    console.log('  Pour un déploiement, renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID — voir le README.\n');
+  } else {
+    console.log('✗ Aucune source configurée.');
+    console.log('  Renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID dans .env (voir le README),');
+    console.log('  ou installe Playwright : npm install && npx playwright install chromium\n');
     return;
   }
+
+  const searchWeb = useApi ? searchViaApi : searchViaBrowser;
 
   const collected = new Map();
   let totalResults = 0;
@@ -45,6 +54,7 @@ function truncate(value, length = 66) {
       for (const item of results) {
         if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) continue;
         kept += 1;
+        item.publishedAt = item.publishedAt ?? parseRelativeDate(item.published);
         const key = item.title.toLowerCase().slice(0, 60);
         const existing = collected.get(key);
         if (existing) {
@@ -80,11 +90,13 @@ function truncate(value, length = 66) {
 
     console.log(`[rang ${item.bestRank}] ${truncate(item.title)}`);
     console.log(`   ${truncate(enriched.domain || enriched.url, 58)}`);
+    const when = item.publishedAt
+      ? new Date(item.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+      : item.published || 'date inconnue';
+    console.log(`   publié  : ${when}`);
     console.log(
-      `   publié  : ${item.published || 'date inconnue'}` +
-        (parseRelativeDate(item.published) ? '' : '  (non datable)')
+      `   photo   : ${enriched.image ? (item.feedImage ? '✓ (fournie par l\'API)' : '✓ (page lue)') : '✗ aucune'}   (${seconds}s)`
     );
-    console.log(`   photo   : ${enriched.image ? '✓' : '✗ aucune'}   (${seconds}s)`);
     if (item.queries > 1) console.log(`   trouvé par ${item.queries} requêtes différentes`);
     console.log('');
   }

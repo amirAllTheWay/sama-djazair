@@ -1,5 +1,6 @@
 const { enrichArticle } = require('./articlePage');
-const { searchWeb, parseRelativeDate } = require('./googleSearch');
+const { searchWeb: searchViaApi, isConfigured: apiConfigured } = require('./googleCse');
+const { searchWeb: searchViaBrowser, parseRelativeDate } = require('./googleSearch');
 const { isAvailable: browserAvailable } = require('./browserResolver');
 const {
   detectBrands,
@@ -96,30 +97,46 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
       // two positions is the one worth keeping.
       existing.matchedQueries.add(label);
       existing.bestRank = Math.min(existing.bestRank, item.rank ?? 99);
+      existing.feedImage = existing.feedImage || item.feedImage;
       return;
     }
     collected.set(key, { ...item, bestRank: item.rank ?? 99, matchedQueries: new Set([label]) });
   }
 
-  if (!browserAvailable()) {
+  // The API is the deployable path: no browser, no window, no captcha. The
+  // scraper stays as a local fallback for when no key is configured yet.
+  const useApi = apiConfigured();
+  if (!useApi && !browserAvailable()) {
     return {
       articles: [],
       errors: {
-        navigateur:
-          "Playwright est requis : la recherche Google passe par un vrai navigateur. " +
-          'Lance « npm install && npx playwright install chromium ».',
+        source:
+          'Aucune source de recherche. Renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID dans .env ' +
+          '(voir le README), ou installe Playwright pour la recherche par navigateur.',
       },
     };
   }
 
   for (const query of queries) {
     try {
-      const results = await searchWeb(query, { recency: star.recency || 'month' });
-      for (const item of results || []) {
-        absorb({ ...item, publishedAt: parseRelativeDate(item.published), source: null }, query);
+      const results =
+        (useApi
+          ? await searchViaApi(query, { recency: star.recency || 'month' })
+          : await searchViaBrowser(query, { recency: star.recency || 'month' })) || [];
+
+      for (const item of results) {
+        absorb(
+          {
+            ...item,
+            // The scraper only knows "3 days ago"; the API returns a real date.
+            publishedAt: item.publishedAt ?? parseRelativeDate(item.published),
+            source: null,
+          },
+          query
+        );
       }
     } catch (err) {
-      errors[`google:${query}`] = err.message || String(err);
+      errors[`${useApi ? 'api' : 'google'}:${query}`] = err.message || String(err);
     }
   }
 

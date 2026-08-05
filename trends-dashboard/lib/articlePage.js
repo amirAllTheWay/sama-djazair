@@ -114,7 +114,23 @@ function applyMeta(enriched, { image, summary, source }) {
 }
 
 async function enrichArticle(article) {
-  const enriched = { ...article, image: null, summary: article.snippet || null, url: article.link };
+  const enriched = {
+    ...article,
+    image: article.feedImage || null,
+    summary: article.snippet || null,
+    url: article.link,
+  };
+
+  // The Custom Search API returns the publisher's own og:image in its pagemap,
+  // so a result that arrived with one needs no page visit at all.
+  if (enriched.image) {
+    try {
+      enriched.domain = new URL(enriched.url).hostname.replace(/^www\./, '');
+    } catch {
+      /* leave domain unset rather than fail the article */
+    }
+    return enriched;
+  }
 
   // A plain request is cheap and works for most publishers; the browser is
   // held back for the ones that answer 403 to anything that is not one.

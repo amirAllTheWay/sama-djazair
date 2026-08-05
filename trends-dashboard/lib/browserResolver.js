@@ -1,8 +1,7 @@
-// Google captchas a browser that looks automated. Three things make the
-// difference, and all three are on by default here: a profile that persists
-// between runs so cookies build up like a real user's, the machine's actual
-// Chrome rather than Playwright's bundled build, and a visible window —
-// headless is the single strongest detection signal.
+// Opens article pages to read their OpenGraph tags, for publishers that answer
+// 403 to a plain HTTP client. It is no longer the search source — that runs on
+// Google's Custom Search API — so it needs no visible window, and the whole
+// module stays optional.
 
 const path = require('path');
 
@@ -10,7 +9,10 @@ const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS || 25_000);
 const IDLE_SHUTDOWN_MS = 60_000;
 const PROFILE_DIR = path.join(__dirname, '..', 'data', 'browser-profile');
 
-const HEADLESS = process.env.BROWSER_HEADLESS === 'true';
+// Hidden by default again. The window only mattered while the browser was the
+// search source and challenges had to be solved by hand; reading an article's
+// meta tags attracts none.
+const HEADLESS = process.env.BROWSER_HEADLESS !== 'false';
 
 let playwrightModule;
 let contextPromise = null;

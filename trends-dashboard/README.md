@@ -9,16 +9,16 @@ en faire un contenu.
 
 Au clic sur **Actualiser**, pour chaque star de `config/stars.json` :
 
-1. Tape chaque requête de `articleQueries` dans **le moteur de recherche
-   Google**, via un vrai navigateur, avec le filtre de récence de Google
-   (`recency`, « month » par défaut).
+1. Envoie chaque requête de `articleQueries` à **Google**, avec son filtre de
+   récence (`recency`, « month » par défaut) — via l'API Custom Search, ou à
+   défaut en lisant la page de résultats dans un navigateur.
 2. Ne garde que les résultats qui parlent de vêtements, via le vocabulaire mode
    de `lib/fashionVocabulary.js`, et écarte les agrégateurs, YouTube et les
    réseaux sociaux.
 3. Dédoublonne sur le titre. Un article trouvé par plusieurs requêtes conserve
    son meilleur rang — sa pertinence est plus large.
-4. Ouvre les mieux classés dans le navigateur et lit leurs métadonnées
-   OpenGraph : photo de partage et résumé rédactionnel.
+4. Récupère photo et résumé : l'API les fournit directement, sinon la page de
+   l'éditeur est lue pour ses métadonnées OpenGraph.
 5. Extrait les pièces, les maisons et l'occasion depuis le titre et le résumé.
 6. Classe, et garde les 5 meilleurs.
 
@@ -91,40 +91,47 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`)
 
-## Le navigateur est requis
+## La recherche Google
 
-La recherche Google n'a pas d'API gratuite et sa page de résultats est rendue
-en JavaScript : seul un vrai navigateur peut la lire. Il sert aussi à ouvrir
-les articles pour y prendre la photo, ce qui règle au passage les `403` que
-plusieurs éditeurs opposent aux clients non-navigateurs.
+Deux chemins, selon que le projet tourne en local ou en ligne.
+
+### API Custom Search — le chemin déployable
+
+C'est l'API officielle de Google : du JSON, sans navigateur, sans captcha
+possible, **100 requêtes par jour gratuites**. C'est la seule option qui
+fonctionne sur un serveur, où une fenêtre de navigateur est impossible et où
+l'IP de datacenter attire les vérifications.
+
+Deux valeurs à mettre dans `.env` :
+
+1. **`GOOGLE_CSE_ID`** — crée un moteur sur
+   [programmablesearchengine.google.com](https://programmablesearchengine.google.com/controlpanel/create),
+   puis dans ses paramètres active **« Rechercher sur l'ensemble du Web »**
+   (sans quoi il ne cherchera que sur les sites que tu listes).
+2. **`GOOGLE_API_KEY`** — crée une clé sur
+   [console.cloud.google.com](https://console.cloud.google.com/apis/credentials),
+   puis active **Custom Search API** sur le même projet.
+
+L'API renvoie la photo de l'article dans sa réponse, ce qui évite d'ouvrir la
+page : une collecte prend alors quelques secondes.
+
+Au-delà de 100 requêtes/jour, il faut activer la facturation (5 $ pour 1000).
+Avec 4 requêtes par collecte, cela laisse 25 actualisations par jour.
+
+### Recherche par navigateur — repli local
+
+Sans clé configurée, la recherche passe par Playwright, qui lit la page de
+résultats. Utile pour essayer sans rien créer, mais **non déployable** : Google
+challenge les navigateurs automatisés, et résoudre la vérification demande une
+fenêtre visible (`BROWSER_HEADLESS=false`).
 
 ```bash
 npm install
 npx playwright install chromium
 ```
 
-### Si Google demande une vérification
-
-C'est le point faible de l'approche : Google challenge ce qui ressemble à un
-robot. Trois réglages, actifs par défaut, réduisent fortement le risque :
-
-- **Un profil persistant** (`data/browser-profile/`) : les cookies obtenus à la
-  première visite sont réutilisés ensuite, ce qui distingue un visiteur qui
-  revient d'un script qui débarque.
-- **Le vrai Chrome de la machine** plutôt que le Chromium de Playwright, moins
-  reconnaissable. Repli automatique sur Chromium si Chrome est absent.
-- **Une fenêtre visible.** Le mode masqué est le signal de détection le plus
-  fort — et surtout, une fenêtre visible permet de résoudre la vérification à
-  la main. La collecte attend alors jusqu'à 3 minutes, puis reprend seule. Grâce
-  au profil persistant, c'est demandé une fois, pas à chaque collecte.
-
-Les recherches sont par ailleurs espacées de 2,5 à 5 secondes : quatre requêtes
-d'affilée est en soi un signal.
-
-Une fois que les collectes passent sans être challengées, `BROWSER_HEADLESS=true`
-dans `.env` masque la fenêtre.
-
-Compter environ 40 à 80 secondes par collecte.
+Le navigateur reste utile même avec l'API : il sert à lire les pages des
+éditeurs qui refusent les requêtes ordinaires par un `403`.
 
 ## Créer un article depuis une carte
 
