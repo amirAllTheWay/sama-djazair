@@ -1,6 +1,6 @@
 const { fetchStarArticles, DEFAULT_GEO, DEFAULT_HL } = require('./fetchArticles');
 const { loadStars, saveLatest } = require('./store');
-const { takeBrowserError } = require('./newsClient');
+const { takeBrowserError } = require('./articlePage');
 const { closeBrowser, isAvailable } = require('./browserResolver');
 
 async function runFetchCycle() {

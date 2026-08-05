@@ -1,4 +1,4 @@
-const { enrichArticle } = require('./newsClient');
+const { enrichArticle } = require('./articlePage');
 const { searchWeb, parseRelativeDate } = require('./googleSearch');
 const { isAvailable: browserAvailable } = require('./browserResolver');
 const {

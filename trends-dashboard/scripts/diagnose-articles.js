@@ -1,86 +1,97 @@
-// Walks the collection for one star and reports, article by article, whether
-// its relay link resolved and whether a photo came back — so a missing image
-// can be traced to the browser, the resolution, or the publisher.
+// Runs the exact same pipeline as a refresh, printing what each stage did, so
+// a weak result set can be traced to the search, the fashion filter, or the
+// page read.
 //
 //   npm run diagnose
 //   npm run diagnose -- "Timothee Chalamet"
 
-const { searchNews, enrichArticle, takeBrowserError } = require('../lib/newsClient');
-const { searchWeb } = require('../lib/googleSearch');
+const { searchWeb, parseRelativeDate } = require('../lib/googleSearch');
+const { enrichArticle, takeBrowserError } = require('../lib/articlePage');
 const { isAvailable, closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
+const { defaultArticleQueries } = require('../lib/fetchArticles');
 const { loadStars } = require('../lib/store');
 
-const name = process.argv[2] || loadStars()[0]?.name || 'Jacob Elordi';
+const star = loadStars()[0] || {};
+const name = process.argv[2] || star.name || 'Jacob Elordi';
+const queries = process.argv[2] ? defaultArticleQueries(name) : star.articleQueries || defaultArticleQueries(name);
+const recency = star.recency || 'month';
 
-function truncate(value, length = 70) {
+function truncate(value, length = 66) {
   if (!value) return '—';
   return value.length > length ? `${value.slice(0, length)}…` : value;
 }
 
 (async () => {
-  console.log(`\nDiagnostic articles — « ${name} »\n`);
+  console.log(`\nDiagnostic — « ${name} », fenêtre : ${recency}\n`);
 
-  console.log(
-    isAvailable()
-      ? '✓ Playwright disponible — les liens Google peuvent être résolus.'
-      : "✗ Playwright absent — aucun lien Google ne pourra donner de photo.\n" +
-          '  Installe-le : npm install && npx playwright install chromium'
-  );
+  if (!isAvailable()) {
+    console.log('✗ Playwright absent. La recherche Google passe par un vrai navigateur,');
+    console.log('  il n\'y a donc aucune source sans lui.');
+    console.log('  Installe-le : npm install && npx playwright install chromium\n');
+    return;
+  }
 
-  const query = `${name} style`;
-  let items = [];
+  const collected = new Map();
+  let totalResults = 0;
 
-  if (isAvailable()) {
-    console.log(`\n— Recherche Google (web), « ${query} », dernier mois`);
+  for (const query of queries) {
+    process.stdout.write(`« ${query} » … `);
     try {
-      const web = (await searchWeb(query, { recency: 'month' })) || [];
-      console.log(`  ${web.length} résultats`);
-      for (const item of web.slice(0, 5)) {
-        console.log(`   · ${truncate(item.title, 58)}`);
-        console.log(`     ${truncate(item.link, 62)}  [${item.published || 'date inconnue'}]`);
+      const results = (await searchWeb(query, { recency })) || [];
+      totalResults += results.length;
+
+      let kept = 0;
+      for (const item of results) {
+        if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) continue;
+        kept += 1;
+        const key = item.title.toLowerCase().slice(0, 60);
+        const existing = collected.get(key);
+        if (existing) {
+          existing.bestRank = Math.min(existing.bestRank, item.rank);
+          existing.queries += 1;
+        } else {
+          collected.set(key, { ...item, bestRank: item.rank, queries: 1 });
+        }
       }
-      items = items.concat(web);
+      console.log(`${results.length} résultats, ${kept} sur la mode`);
     } catch (err) {
-      console.log(`  échec — ${err.message}`);
+      console.log(`échec — ${err.message}`);
     }
   }
 
-  console.log('\n— Google News (RSS)');
-  try {
-    const news = await searchNews(query, {});
-    console.log(`  ${news.length} résultats`);
-    items = items.concat(news);
-  } catch (err) {
-    console.log(`  échec — ${err.message}`);
+  const candidates = [...collected.values()].sort((a, b) => a.bestRank - b.bestRank);
+  console.log(
+    `\n${totalResults} résultats au total, ${candidates.length} retenus après filtrage et dédoublonnage.\n`
+  );
+  if (!candidates.length) {
+    console.log('Aucun article ne passe le filtre mode — élargis `articleQueries` ou `recency`.\n');
+    return;
   }
 
-  const relevant = items.filter((item) => isFashionQuery(`${item.title} ${item.snippet || ''}`));
-  console.log(`\n${items.length} résultats au total, dont ${relevant.length} sur la mode.\n`);
-  if (!relevant.length) return;
-
+  console.log('Lecture des pages, du mieux classé au moins bien :\n');
   let withPhoto = 0;
-  for (const item of relevant.slice(0, 4)) {
-    console.log(`« ${truncate(item.title)} »`);
+
+  for (const item of candidates.slice(0, 5)) {
     const started = Date.now();
     const enriched = await enrichArticle(item);
     const seconds = ((Date.now() - started) / 1000).toFixed(1);
-
-    const resolved = !/news\.google\.com/.test(enriched.url);
-    console.log(`  résolu  : ${resolved ? '✓ ' + truncate(enriched.url, 58) : '✗ toujours sur Google'}`);
-    console.log(`  photo   : ${enriched.image ? '✓ ' + truncate(enriched.image, 52) : '✗ aucune'}`);
-    console.log(`  durée   : ${seconds}s\n`);
     if (enriched.image) withPhoto += 1;
+
+    console.log(`[rang ${item.bestRank}] ${truncate(item.title)}`);
+    console.log(`   ${truncate(enriched.domain || enriched.url, 58)}`);
+    console.log(
+      `   publié  : ${item.published || 'date inconnue'}` +
+        (parseRelativeDate(item.published) ? '' : '  (non datable)')
+    );
+    console.log(`   photo   : ${enriched.image ? '✓' : '✗ aucune'}   (${seconds}s)`);
+    if (item.queries > 1) console.log(`   trouvé par ${item.queries} requêtes différentes`);
+    console.log('');
   }
 
   const browserError = takeBrowserError();
   if (browserError) console.log(`Erreur navigateur : ${browserError}\n`);
 
-  console.log(`→ ${withPhoto} article(s) illustré(s) sur ${Math.min(relevant.length, 4)} testé(s).`);
-  if (!withPhoto && isAvailable()) {
-    console.log("  Chromium est-il installé ? « npx playwright install chromium »");
-  }
-  console.log('');
-
+  console.log(`→ ${withPhoto} article(s) illustré(s) sur ${Math.min(candidates.length, 5)}.\n`);
   await closeBrowser();
 })();

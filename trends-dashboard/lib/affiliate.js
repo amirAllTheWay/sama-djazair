@@ -1,4 +1,4 @@
-const { fetchUrl } = require('./newsClient');
+const { fetchUrl } = require('./articlePage');
 
 // Both platforms are queried for the same piece and the better answer wins:
 // ShopMy is creator-and-fashion oriented, impact.com carries the wider merchant
