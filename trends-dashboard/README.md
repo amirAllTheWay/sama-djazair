@@ -108,9 +108,17 @@ Deux valeurs à mettre dans `.env` :
    [programmablesearchengine.google.com](https://programmablesearchengine.google.com/controlpanel/create),
    puis dans ses paramètres active **« Rechercher sur l'ensemble du Web »**
    (sans quoi il ne cherchera que sur les sites que tu listes).
-2. **`GOOGLE_API_KEY`** — crée une clé sur
-   [console.cloud.google.com](https://console.cloud.google.com/apis/credentials),
-   puis active **Custom Search API** sur le même projet.
+2. **Active l'API** — la console Google Cloud est peu lisible là-dessus, mais
+   un lien direct y mène :
+   [console.cloud.google.com/apis/library/customsearch.googleapis.com](https://console.cloud.google.com/apis/library/customsearch.googleapis.com)
+   → bouton **ACTIVER**. Si un projet est demandé, crée-en un depuis le
+   sélecteur en haut de page, puis reviens sur ce lien.
+3. **`GOOGLE_API_KEY`** — sur
+   [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
+   → **+ CRÉER DES IDENTIFIANTS** → **Clé API**.
+
+L'ordre compte : une clé créée avant l'activation de l'API existe, mais Google
+refuse ses requêtes par un `403`.
 
 L'API renvoie la photo de l'article dans sa réponse, ce qui évite d'ouvrir la
 page : une collecte prend alors quelques secondes.
