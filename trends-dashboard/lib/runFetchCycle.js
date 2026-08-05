@@ -31,6 +31,8 @@ async function runFetchCycle() {
         hl: star.hl ?? DEFAULT_HL,
       });
       entry.articles = news.articles;
+      entry.excluded = news.excluded;
+      entry.dead = news.dead;
       Object.assign(entry.errors, news.errors);
     } catch (err) {
       entry.errors.articles = err.message || String(err);
@@ -45,6 +47,8 @@ async function runFetchCycle() {
     const relayed = entry.articles.filter((a) => /news\.google\.com/.test(a.url)).length;
     console.log(
       `[articles] ${star.slug} — ${entry.articles.length} article(s), ${illustrated} avec photo` +
+        (entry.excluded ? `, ${entry.excluded} hors presse écarté(s)` : '') +
+        (entry.dead ? `, ${entry.dead} lien(s) mort(s) retiré(s)` : '') +
         (relayed ? `, ${relayed} lien(s) Google non résolu(s)` : '')
     );
     for (const article of entry.articles) {

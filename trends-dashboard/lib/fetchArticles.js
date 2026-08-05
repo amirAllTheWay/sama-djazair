@@ -143,7 +143,12 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
 
   const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);
 
-  const articles = enriched.map((article) => {
+  // A card whose link 404s is worse than no card: it looks usable until it is
+  // clicked. Enriching twice as many as are kept leaves room to drop these.
+  const alive = enriched.filter((article) => !article.dead);
+  const dead = enriched.length - alive.length;
+
+  const articles = alive.map((article) => {
     const text = `${article.title} ${article.summary || ''}`;
     return {
       title: article.title,
@@ -164,7 +169,7 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   for (const article of articles) article.score = relevanceScore(article);
   articles.sort((a, b) => b.score - a.score);
 
-  return { articles: articles.slice(0, MAX_ARTICLES), errors, excluded };
+  return { articles: articles.slice(0, MAX_ARTICLES), errors, excluded, dead };
 }
 
 module.exports = { fetchStarArticles, defaultArticleQueries, DEFAULT_GEO, DEFAULT_HL };

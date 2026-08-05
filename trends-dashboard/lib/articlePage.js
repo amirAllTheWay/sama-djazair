@@ -23,7 +23,7 @@ const takeBrowserError = () => {
   return error;
 };
 
-function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {} } = {}) {
+function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {}, method = 'GET' } = {}) {
   return new Promise((resolve, reject) => {
     let url;
     try {
@@ -36,7 +36,7 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {}
       {
         host: url.hostname,
         path: url.pathname + url.search,
-        method: 'GET',
+        method,
         headers: {
           'User-Agent': USER_AGENT,
           Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
@@ -49,7 +49,9 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {}
           res.resume();
           if (redirectsLeft <= 0) return reject(new Error('Trop de redirections'));
           const next = new URL(res.headers.location, url).toString();
-          return resolve(fetchUrl(next, { redirectsLeft: redirectsLeft - 1, maxBytes, headers }));
+          return resolve(
+            fetchUrl(next, { redirectsLeft: redirectsLeft - 1, maxBytes, headers, method })
+          );
         }
 
         let body = '';
@@ -113,6 +115,20 @@ function applyMeta(enriched, { image, summary, source }) {
   return enriched;
 }
 
+// Whether the link actually leads somewhere. Only a 404/410 is treated as
+// dead: publishers routinely answer 403 or 429 to anything that is not a
+// browser, and those pages open perfectly well when clicked. A network error
+// is inconclusive too, so it counts as alive rather than dropping a good
+// article on a transient failure.
+async function isDeadLink(target) {
+  try {
+    const { statusCode } = await fetchUrl(target, { maxBytes: 1, method: 'HEAD' });
+    return statusCode === 404 || statusCode === 410;
+  } catch {
+    return false;
+  }
+}
+
 async function enrichArticle(article) {
   const enriched = {
     ...article,
@@ -121,14 +137,16 @@ async function enrichArticle(article) {
     url: article.link,
   };
 
-  // The Custom Search API returns the publisher's own og:image in its pagemap,
-  // so a result that arrived with one needs no page visit at all.
+  // A result that arrived with its own photo needs no page visit for the
+  // card's sake — but the link still has to be checked, or a dead URL sails
+  // straight through precisely on the articles that rank highest.
   if (enriched.image) {
     try {
       enriched.domain = new URL(enriched.url).hostname.replace(/^www\./, '');
     } catch {
       /* leave domain unset rather than fail the article */
     }
+    enriched.dead = await isDeadLink(enriched.url);
     return enriched;
   }
 
@@ -136,6 +154,11 @@ async function enrichArticle(article) {
   // held back for the ones that answer 403 to anything that is not one.
   try {
     const { statusCode, body, finalUrl } = await fetchUrl(article.link, { maxBytes: MAX_HTML_BYTES });
+    if (statusCode === 404 || statusCode === 410) {
+      // Gone for good: the browser would only confirm it, slowly.
+      enriched.dead = true;
+      return enriched;
+    }
     if (statusCode === 200 && body) {
       enriched.url = finalUrl;
       return applyMeta(enriched, {
@@ -163,4 +186,4 @@ async function enrichArticle(article) {
   return enriched;
 }
 
-module.exports = { enrichArticle, fetchUrl, decodeEntities, takeBrowserError };
+module.exports = { enrichArticle, fetchUrl, isDeadLink, decodeEntities, takeBrowserError };

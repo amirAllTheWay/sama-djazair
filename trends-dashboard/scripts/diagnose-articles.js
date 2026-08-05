@@ -114,6 +114,9 @@ function truncate(value, length = 66) {
     console.log(
       `   photo   : ${enriched.image ? (item.feedImage ? '✓ (fournie par l\'API)' : '✓ (page lue)') : '✗ aucune'}   (${seconds}s)`
     );
+    console.log(
+      `   lien    : ${enriched.dead ? '✗ MORT (404) — retiré du dashboard' : '✓ ouvrable'}`
+    );
     if (item.queries > 1) console.log(`   trouvé par ${item.queries} requêtes différentes`);
     console.log('');
   }
