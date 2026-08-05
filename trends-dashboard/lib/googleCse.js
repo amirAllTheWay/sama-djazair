@@ -91,6 +91,18 @@ function describeApiError(statusCode, json) {
           'ou ajoute « Custom Search API » à la liste autorisée. Puis enregistre.'
       );
     }
+    if (/does not have the access/i.test(reason)) {
+      // Reached after the key restriction is already correct, so the usual
+      // cause is propagation: enabling an API and editing its restrictions
+      // both take a few minutes to take effect.
+      return new Error(
+        "Le projet n'a pas encore accès à Custom Search JSON API. Deux causes : " +
+          "soit l'activation vient d'être faite et n'est pas encore propagée — attends 5 minutes " +
+          'et relance ; soit la clé et l\'API sont sur deux projets différents — compare le nom ' +
+          'du projet en haut de console.cloud.google.com/apis/credentials et de ' +
+          'console.cloud.google.com/apis/library/customsearch.googleapis.com.'
+      );
+    }
     if (/has not been used|is disabled/i.test(reason)) {
       return new Error(
         "« Custom Search API » n'est pas activée sur ce projet. Active-la sur " +
