@@ -1,15 +1,13 @@
-// Shows what each source actually returns, so a missing photo can be traced to
-// the feed, the link resolution, or the publisher blocking us.
+// Walks the collection for one star and reports, article by article, whether
+// its relay link resolved and whether a photo came back — so a missing image
+// can be traced to the browser, the resolution, or the publisher.
 //
 //   npm run diagnose
+//   npm run diagnose -- "Timothee Chalamet"
 
-const {
-  PUBLISHER_FEEDS,
-  fetchUrl,
-  searchNews,
-  searchBingNews,
-  enrichArticle,
-} = require('../lib/newsClient');
+const { searchNews, enrichArticle, takeBrowserError } = require('../lib/newsClient');
+const { isAvailable, closeBrowser } = require('../lib/browserResolver');
+const { isFashionQuery } = require('../lib/fashionVocabulary');
 const { loadStars } = require('../lib/store');
 
 const name = process.argv[2] || loadStars()[0]?.name || 'Jacob Elordi';
@@ -22,63 +20,46 @@ function truncate(value, length = 70) {
 (async () => {
   console.log(`\nDiagnostic articles — « ${name} »\n`);
 
-  console.log('1. Flux des éditeurs');
-  let withImages = 0;
-  for (const feed of PUBLISHER_FEEDS) {
-    process.stdout.write(`   ${feed.name.padEnd(18)}`);
-    try {
-      const { statusCode, body } = await fetchUrl(feed.url, { maxBytes: 900_000 });
-      if (statusCode !== 200) {
-        console.log(`HTTP ${statusCode}`);
-        continue;
-      }
-      const items = body.match(/<item[\s>][\s\S]*?<\/item>/gi) || [];
-      const mentions = items.filter((i) => i.toLowerCase().includes(name.toLowerCase()));
-      const illustrated = mentions.filter((i) => /media:content|media:thumbnail|enclosure|<img/i.test(i));
-      withImages += illustrated.length;
-      console.log(
-        `${String(items.length).padStart(3)} articles, ${mentions.length} sur la star, ${illustrated.length} avec photo`
-      );
-    } catch (err) {
-      console.log(`échec — ${err.message}`);
-    }
-  }
-  console.log(`   → ${withImages} article(s) illustré(s) trouvé(s) dans les flux directs\n`);
+  console.log(
+    isAvailable()
+      ? '✓ Playwright disponible — les liens Google peuvent être résolus.'
+      : "✗ Playwright absent — aucun lien Google ne pourra donner de photo.\n" +
+          '  Installe-le : npm install && npx playwright install chromium'
+  );
 
-  console.log('2. Bing News (liens directs vers les éditeurs)');
+  let items;
   try {
-    const items = await searchBingNews(`${name} outfit`);
-    console.log(`   ${items.length} résultats\n`);
-
-    for (const item of items.slice(0, 3)) {
-      console.log(`   « ${truncate(item.title)} »`);
-      console.log(`     lien      : ${truncate(item.link, 60)}`);
-      const enriched = await enrichArticle(item);
-      console.log(`     photo     : ${enriched.image ? '✓ ' + truncate(enriched.image, 55) : '✗ aucune'}`);
-      console.log(`     résumé    : ${enriched.summary ? '✓ ' + truncate(enriched.summary, 55) : '✗ aucun'}\n`);
-    }
+    items = await searchNews(`${name} outfit`, {});
   } catch (err) {
-    console.log(`   échec — ${err.message}\n`);
+    console.log(`\nGoogle News a échoué — ${err.message}\n`);
+    return;
   }
 
-  console.log('3. Google News + résolution du lien');
-  try {
-    const items = await searchNews(`${name} outfit`, {});
-    console.log(`   ${items.length} résultats`);
+  const relevant = items.filter((item) => isFashionQuery(`${item.title} ${item.snippet || ''}`));
+  console.log(`\n${items.length} résultats, dont ${relevant.length} sur la mode.\n`);
 
-    for (const item of items.slice(0, 3)) {
-      console.log(`\n   « ${truncate(item.title)} »`);
-      console.log(`     lien brut : ${truncate(item.link, 60)}`);
-      const enriched = await enrichArticle(item);
-      console.log(`     résolu    : ${truncate(enriched.url, 60)}`);
-      console.log(`     photo     : ${enriched.image ? '✓ ' + truncate(enriched.image, 55) : '✗ aucune'}`);
-      console.log(`     résumé    : ${enriched.summary ? '✓ ' + truncate(enriched.summary, 55) : '✗ aucun'}`);
-    }
-  } catch (err) {
-    console.log(`   échec — ${err.message}`);
+  let withPhoto = 0;
+  for (const item of relevant.slice(0, 4)) {
+    console.log(`« ${truncate(item.title)} »`);
+    const started = Date.now();
+    const enriched = await enrichArticle(item);
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
+
+    const resolved = !/news\.google\.com/.test(enriched.url);
+    console.log(`  résolu  : ${resolved ? '✓ ' + truncate(enriched.url, 58) : '✗ toujours sur Google'}`);
+    console.log(`  photo   : ${enriched.image ? '✓ ' + truncate(enriched.image, 52) : '✗ aucune'}`);
+    console.log(`  durée   : ${seconds}s\n`);
+    if (enriched.image) withPhoto += 1;
   }
 
-  console.log('Lecture : la section 2 est celle qui compte. Si Bing renvoie des');
-  console.log('résultats avec « photo ✓ », les cartes seront illustrées. Si Bing');
-  console.log('échoue ou que les photos manquent, colle cette sortie.\n');
+  const browserError = takeBrowserError();
+  if (browserError) console.log(`Erreur navigateur : ${browserError}\n`);
+
+  console.log(`→ ${withPhoto} article(s) illustré(s) sur ${Math.min(relevant.length, 4)} testé(s).`);
+  if (!withPhoto && isAvailable()) {
+    console.log("  Chromium est-il installé ? « npx playwright install chromium »");
+  }
+  console.log('');
+
+  await closeBrowser();
 })();

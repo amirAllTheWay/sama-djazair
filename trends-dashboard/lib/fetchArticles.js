@@ -1,9 +1,4 @@
-const {
-  searchNews,
-  searchBingNews,
-  searchPublisherFeeds,
-  enrichArticle,
-} = require('./newsClient');
+const { searchNews, enrichArticle } = require('./newsClient');
 const {
   detectBrands,
   detectOccasions,
@@ -11,11 +6,12 @@ const {
   isFashionQuery,
 } = require('./fashionVocabulary');
 
-// Four cards keeps the column scannable while leaving room for both sources
-// to be represented. More candidates are enriched than kept, so the ones shown
-// are the best of a real field rather than whatever happened to be newest.
+// More candidates are enriched than kept, so the cards shown are the best of a
+// real field rather than whatever happened to be newest. The pool is smaller
+// than it was with several sources: every Google link now costs a browser
+// navigation, so widening it buys little and costs seconds.
 const MAX_ARTICLES = 4;
-const CANDIDATES_TO_ENRICH = 12;
+const CANDIDATES_TO_ENRICH = 8;
 const ENRICH_CONCURRENCY = 4;
 const RECENT_WINDOW_DAYS = 60;
 
@@ -45,9 +41,9 @@ function ageInDays(publishedAt) {
 
 // No public API reports share counts any more, so "most shared" is inferred:
 // a story several outlets picked up travelled further than one nobody else
-// touched, and recency decays that weight. A photo is a tie-breaker rather
-// than a gate: Google News links cannot be illustrated, and dropping those
-// stories would cost the coverage they carry.
+// touched, and recency decays that weight. A photo stays a tie-breaker rather
+// than a gate, since resolving a relay link can fail and a story worth knowing
+// about is worth a card either way.
 function buzzScore(article) {
   const age = ageInDays(article.publishedAt);
   const recency = age === null ? 0.3 : Math.max(0, 1 - age / RECENT_WINDOW_DAYS);
@@ -80,46 +76,23 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   function absorb(item, label) {
     if (!item.title || !item.link) return;
 
-    // Feeds answer loosely; keep only what is about clothes.
+    // The feed answers the query loosely; keep only what is about clothes.
     if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) return;
 
     const key = dedupeKey(item);
     const existing = collected.get(key);
     if (existing) {
+      // Same story reached by another query: proof it travelled, not a duplicate.
       existing.outletCount += 1;
       existing.matchedQueries.add(label);
-      // A copy that arrived with its photo beats one that did not.
-      if (!existing.feedImage && item.feedImage) {
-        existing.feedImage = item.feedImage;
-        existing.link = item.link;
-      }
       return;
     }
     collected.set(key, { ...item, outletCount: 1, matchedQueries: new Set([label]) });
   }
 
-  // Publisher feeds carry the photo inline, but only hold the last few dozen
-  // articles across all topics, so a given star is often absent from them.
-  try {
-    const direct = await searchPublisherFeeds(star.name || star.keyword);
-    for (const item of direct.items) absorb(item, 'flux éditeur');
-    Object.assign(errors, direct.errors);
-  } catch (err) {
-    errors.publisherFeeds = err.message || String(err);
-  }
-
-  // Bing carries the search breadth and, crucially, links straight to the
-  // publisher — so the article page can be read for its photo.
-  for (const query of queries) {
-    try {
-      for (const item of await searchBingNews(query)) absorb(item, query);
-    } catch (err) {
-      errors[`bing:${query}`] = err.message || String(err);
-    }
-  }
-
-  // Google News covers outlets Bing misses, and its headlines stand on their
-  // own — a story worth knowing about is worth a card even unillustrated.
+  // Google News is the only source: its editorial selection proved the most
+  // relevant, and the browser resolver now reaches the publisher pages its
+  // relay links hide, so choosing it no longer costs the photos.
   for (const query of queries) {
     try {
       for (const item of await searchNews(query, { geo, hl })) absorb(item, query);
@@ -128,15 +101,8 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     }
   }
 
-  // Enrich the ones that can still yield a photo first: a Google relay link
-  // resolves to nothing, so it should never displace a direct publisher link.
-  const resolvable = (item) => (item.feedImage ? 0 : /news\.google\.com/.test(item.link) ? 2 : 1);
   const candidates = [...collected.values()]
-    .sort(
-      (a, b) =>
-        resolvable(a) - resolvable(b) ||
-        Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0)
-    )
+    .sort((a, b) => Date.parse(b.publishedAt || 0) - Date.parse(a.publishedAt || 0))
     .slice(0, CANDIDATES_TO_ENRICH);
 
   const enriched = await mapWithConcurrency(candidates, ENRICH_CONCURRENCY, enrichArticle);

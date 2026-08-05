@@ -16,10 +16,15 @@ Au clic sur **Actualiser**, pour chaque star de `config/stars.json` :
    de `lib/fashionVocabulary.js`.
 3. Dédoublonne sur le titre : un sujet syndiqué garde son titre, pas son URL.
    Le nombre de médias l'ayant repris est conservé.
-4. Suit chaque lien jusqu'à l'éditeur pour en lire les métadonnées OpenGraph —
-   photo de partage et résumé rédactionnel.
+4. Résout chaque lien relais jusqu'à la page de l'éditeur, puis y lit les
+   métadonnées OpenGraph — photo de partage et résumé rédactionnel.
 5. Extrait les pièces, les maisons et l'occasion depuis le titre et le résumé.
-6. Classe, et garde les 3 meilleurs.
+6. Classe, et garde les 4 meilleurs.
+
+Google News est la seule source. Bing et les flux RSS des magazines ont été
+utilisés un temps pour contourner les liens relais ; la résolution par
+navigateur les rend inutiles, et la sélection éditoriale de Google s'est
+révélée plus pertinente.
 
 ## Sur le classement
 
