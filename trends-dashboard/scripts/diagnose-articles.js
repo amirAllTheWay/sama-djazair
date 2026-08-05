@@ -10,6 +10,7 @@ const { activeSource, describeSetup } = require('../lib/searchSource');
 const { enrichArticle, takeBrowserError } = require('../lib/articlePage');
 const { closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
+const { isExcluded, isKnownPress } = require('../lib/publishers');
 const { defaultArticleQueries } = require('../lib/fetchArticles');
 const { loadStars } = require('../lib/store');
 
@@ -37,6 +38,8 @@ function truncate(value, length = 66) {
 
   const collected = new Map();
   let totalResults = 0;
+  let totalExcluded = 0;
+  const excludedHosts = new Map();
 
   for (const query of queries) {
     process.stdout.write(`« ${query} » … `);
@@ -45,7 +48,15 @@ function truncate(value, length = 66) {
       totalResults += results.length;
 
       let kept = 0;
+      let dropped = 0;
       for (const item of results) {
+        if (isExcluded(item.link)) {
+          dropped += 1;
+          totalExcluded += 1;
+          const host = (item.link.match(/\/\/([^/]+)/) || [, item.link])[1];
+          excludedHosts.set(host, (excludedHosts.get(host) || 0) + 1);
+          continue;
+        }
         if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) continue;
         kept += 1;
         item.publishedAt = item.publishedAt ?? parseRelativeDate(item.published);
@@ -58,7 +69,9 @@ function truncate(value, length = 66) {
           collected.set(key, { ...item, bestRank: item.rank, queries: 1 });
         }
       }
-      console.log(`${results.length} résultats, ${kept} sur la mode`);
+      console.log(
+        `${results.length} résultats, ${dropped} hors presse écarté(s), ${kept} sur la mode`
+      );
     } catch (err) {
       console.log(`échec — ${err.message}`);
     }
@@ -66,8 +79,17 @@ function truncate(value, length = 66) {
 
   const candidates = [...collected.values()].sort((a, b) => a.bestRank - b.bestRank);
   console.log(
-    `\n${totalResults} résultats au total, ${candidates.length} retenus après filtrage et dédoublonnage.\n`
+    `\n${totalResults} résultats au total, ${candidates.length} retenus après filtrage et dédoublonnage.`
   );
+  if (totalExcluded) {
+    const listed = [...excludedHosts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 6)
+      .map(([host, n]) => `${host} (${n})`)
+      .join(', ');
+    console.log(`${totalExcluded} écarté(s) car hors presse : ${listed}`);
+  }
+  console.log('');
   if (!candidates.length) {
     console.log('Aucun article ne passe le filtre mode — élargis `articleQueries` ou `recency`.\n');
     return;
@@ -83,7 +105,8 @@ function truncate(value, length = 66) {
     if (enriched.image) withPhoto += 1;
 
     console.log(`[rang ${item.bestRank}] ${truncate(item.title)}`);
-    console.log(`   ${truncate(enriched.domain || enriched.url, 58)}`);
+    const outlet = truncate(enriched.domain || enriched.url, 46);
+    console.log(`   ${outlet}${isKnownPress(item.link) ? '   ✓ presse mode connue' : ''}`);
     const when = item.publishedAt
       ? new Date(item.publishedAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
       : item.published || 'date inconnue';

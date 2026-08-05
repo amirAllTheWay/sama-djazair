@@ -1,6 +1,7 @@
 const { enrichArticle } = require('./articlePage');
 const { parseRelativeDate } = require('./googleSearch');
 const { activeSource, describeSetup } = require('./searchSource');
+const { isExcluded, isKnownPress } = require('./publishers');
 const {
   detectBrands,
   detectOccasions,
@@ -60,7 +61,9 @@ function relevanceScore(article) {
   const position = Math.max(0, 1 - (article.bestRank - 1) / 12);
   const breadth = Math.min((article.matchedQueries.length - 1) / 2, 1);
   const illustrated = article.image ? 0.35 : 0;
-  return position * 0.4 + recency * 0.3 + breadth * 0.15 + illustrated;
+  // A named fashion outlet beats an unknown domain repeating the same words.
+  const press = isKnownPress(article.url) ? 0.25 : 0;
+  return position * 0.4 + recency * 0.3 + breadth * 0.15 + illustrated + press;
 }
 
 async function mapWithConcurrency(items, limit, worker) {
@@ -82,9 +85,17 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   const queries = star.articleQueries || defaultArticleQueries(star.keyword);
   const collected = new Map();
   const errors = {};
+  let excluded = 0;
 
   function absorb(item, label) {
     if (!item.title || !item.link) return;
+
+    // Applied here rather than per-source: every backend converges on this
+    // function, so the rule holds whichever one is configured.
+    if (isExcluded(item.link)) {
+      excluded += 1;
+      return;
+    }
 
     // Google answers the query loosely; keep only what is about clothes.
     if (!isFashionQuery(`${item.title} ${item.snippet || ''}`)) return;
@@ -153,7 +164,7 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   for (const article of articles) article.score = relevanceScore(article);
   articles.sort((a, b) => b.score - a.score);
 
-  return { articles: articles.slice(0, MAX_ARTICLES), errors };
+  return { articles: articles.slice(0, MAX_ARTICLES), errors, excluded };
 }
 
 module.exports = { fetchStarArticles, defaultArticleQueries, DEFAULT_GEO, DEFAULT_HL };

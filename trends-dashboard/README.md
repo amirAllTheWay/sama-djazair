@@ -12,15 +12,16 @@ Au clic sur **Actualiser**, pour chaque star de `config/stars.json` :
 1. Envoie chaque requête de `articleQueries` à **Google**, avec son filtre de
    récence (`recency`, « month » par défaut) — via Serper ou l'API Custom
    Search, ou à défaut en lisant la page de résultats dans un navigateur.
-2. Ne garde que les résultats qui parlent de vêtements, via le vocabulaire mode
-   de `lib/fashionVocabulary.js`, et écarte les agrégateurs, YouTube et les
-   réseaux sociaux.
-3. Dédoublonne sur le titre. Un article trouvé par plusieurs requêtes conserve
+2. Écarte tout ce qui n'est pas de la presse — réseaux sociaux, vidéo, wikis,
+   forums, places de marché, agrégateurs — via `lib/publishers.js`.
+3. Ne garde que les résultats qui parlent de vêtements, via le vocabulaire mode
+   de `lib/fashionVocabulary.js`.
+4. Dédoublonne sur le titre. Un article trouvé par plusieurs requêtes conserve
    son meilleur rang — sa pertinence est plus large.
-4. Récupère photo et résumé : l'API les fournit directement, sinon la page de
+5. Récupère photo et résumé : l'API les fournit directement, sinon la page de
    l'éditeur est lue pour ses métadonnées OpenGraph.
-5. Extrait les pièces, les maisons et l'occasion depuis le titre et le résumé.
-6. Classe, et garde les 5 meilleurs.
+6. Extrait les pièces, les maisons et l'occasion depuis le titre et le résumé.
+7. Classe, et garde les 5 meilleurs.
 
 La recherche Google est la seule source. Google News RSS, Bing et les flux RSS
 des magazines ont été essayés : le premier n'indexe que les éditeurs
@@ -40,6 +41,23 @@ plutôt que de le laisser implicite.
 S'y ajoutent la récence (fenêtre de 45 jours) et la présence d'une photo, qui
 compte lourd : sans image, la carte ne répond pas à la question pour laquelle
 le tableau existe.
+
+Enfin, un titre de presse mode reconnu (`PRESS_DOMAINS` dans
+`lib/publishers.js`) prend un bonus : à mots-clés égaux, Vogue passe devant un
+blog inconnu. Ce n'est pas une liste blanche — un domaine absent de la liste
+est conservé, il n'obtient simplement pas le bonus.
+
+### Ce qui est écarté d'office
+
+`lib/publishers.js` élimine par domaine ce qui ne peut pas être un article de
+presse : YouTube et la vidéo, Instagram, TikTok, Pinterest, X, Facebook, les
+forums (Reddit, Quora), les wikis (Wikipedia, Fandom, IMDb), les places de
+marché (Amazon, eBay, Etsy, Vinted, StockX), les agrégateurs (MSN, Flipboard,
+Google News) et les banques d'images (Getty, Shutterstock).
+
+Le filtre s'applique dans `fetchArticles.js`, là où toutes les sources
+convergent : il vaut donc pour Serper, Custom Search et le navigateur.
+`npm run diagnose` affiche le nombre d'écartés et les domaines concernés.
 
 ## Lancer en local
 
