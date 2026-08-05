@@ -1,17 +1,18 @@
 const { fetchStarArticles, DEFAULT_GEO, DEFAULT_HL } = require('./fetchArticles');
 const { loadStars, saveLatest } = require('./store');
 const { takeBrowserError } = require('./articlePage');
-const { closeBrowser, isAvailable } = require('./browserResolver');
+const { closeBrowser } = require('./browserResolver');
+const { activeSource, describeSetup } = require('./searchSource');
 
 async function runFetchCycle() {
   const stars = loadStars();
   const results = [];
 
-  if (!isAvailable()) {
-    console.log(
-      '[articles] Playwright absent — les liens Google News resteront sans photo. ' +
-        'Pour les résoudre : npm install playwright && npx playwright install chromium'
-    );
+  const source = activeSource();
+  if (!source) {
+    console.warn(`[articles] ${describeSetup()}`);
+  } else {
+    console.log(`[articles] Source : ${source.label}`);
   }
 
   for (const star of stars) {

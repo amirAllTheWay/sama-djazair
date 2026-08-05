@@ -1,7 +1,6 @@
 const { enrichArticle } = require('./articlePage');
-const { searchWeb: searchViaApi, isConfigured: apiConfigured } = require('./googleCse');
-const { searchWeb: searchViaBrowser, parseRelativeDate } = require('./googleSearch');
-const { isAvailable: browserAvailable } = require('./browserResolver');
+const { parseRelativeDate } = require('./googleSearch');
+const { activeSource, describeSetup } = require('./searchSource');
 const {
   detectBrands,
   detectOccasions,
@@ -103,32 +102,17 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
     collected.set(key, { ...item, bestRank: item.rank ?? 99, matchedQueries: new Set([label]) });
   }
 
-  // The API is the deployable path: no browser, no window, no captcha. The
-  // scraper stays as a local fallback for when no key is configured yet.
-  const useApi = apiConfigured();
-  if (!useApi && !browserAvailable()) {
-    return {
-      articles: [],
-      errors: {
-        source:
-          'Aucune source de recherche. Renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID dans .env ' +
-          '(voir le README), ou installe Playwright pour la recherche par navigateur.',
-      },
-    };
-  }
+  const source = activeSource();
+  if (!source) return { articles: [], errors: { source: describeSetup() } };
 
   for (const query of queries) {
     try {
-      const results =
-        (useApi
-          ? await searchViaApi(query, { recency: star.recency || 'month' })
-          : await searchViaBrowser(query, { recency: star.recency || 'month' })) || [];
-
+      const results = (await source.searchWeb(query, { recency: star.recency || 'month' })) || [];
       for (const item of results) {
         absorb(
           {
             ...item,
-            // The scraper only knows "3 days ago"; the API returns a real date.
+            // The browser scraper only knows "3 days ago"; the APIs return a date.
             publishedAt: item.publishedAt ?? parseRelativeDate(item.published),
             source: null,
           },
@@ -136,7 +120,7 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
         );
       }
     } catch (err) {
-      errors[`${useApi ? 'api' : 'google'}:${query}`] = err.message || String(err);
+      errors[`${source.id}:${query}`] = err.message || String(err);
     }
   }
 

@@ -34,12 +34,28 @@ function request(url) {
 }
 
 (async () => {
-  console.log('\nVérification des identifiants Google\n');
+  console.log('\nVérification des identifiants de recherche\n');
+
+  // Serper first: it is the option that needs no console, so a working key
+  // here makes the Google diagnosis below moot.
+  console.log(`SERPER_API_KEY : ${mask(process.env.SERPER_API_KEY)}`);
+  if (process.env.SERPER_API_KEY) {
+    const { searchWeb } = require('../lib/serper');
+    try {
+      const results = await searchWeb('test', {});
+      console.log(`✓ Serper fonctionne — ${results.length} résultats.\n`);
+    } catch (err) {
+      console.log(`✗ Serper : ${err.message}\n`);
+    }
+  } else {
+    console.log('  (une clé sur serper.dev suffit à faire tourner la recherche)\n');
+  }
+
   console.log(`GOOGLE_API_KEY : ${mask(key)}`);
   console.log(`GOOGLE_CSE_ID  : ${mask(cx)}\n`);
 
   if (!key || !cx) {
-    console.log('Les deux valeurs doivent être renseignées dans .env.\n');
+    console.log('Les deux valeurs doivent être renseignées pour tester Custom Search.\n');
     return;
   }
 

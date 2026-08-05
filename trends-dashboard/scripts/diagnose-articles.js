@@ -5,10 +5,10 @@
 //   npm run diagnose
 //   npm run diagnose -- "Timothee Chalamet"
 
-const { searchWeb: searchViaApi, isConfigured: apiConfigured } = require('../lib/googleCse');
-const { searchWeb: searchViaBrowser, parseRelativeDate } = require('../lib/googleSearch');
+const { parseRelativeDate } = require('../lib/googleSearch');
+const { activeSource, describeSetup } = require('../lib/searchSource');
 const { enrichArticle, takeBrowserError } = require('../lib/articlePage');
-const { isAvailable, closeBrowser } = require('../lib/browserResolver');
+const { closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
 const { defaultArticleQueries } = require('../lib/fetchArticles');
 const { loadStars } = require('../lib/store');
@@ -26,20 +26,14 @@ function truncate(value, length = 66) {
 (async () => {
   console.log(`\nDiagnostic — « ${name} », fenêtre : ${recency}\n`);
 
-  const useApi = apiConfigured();
-  if (useApi) {
-    console.log("Source : API Google Custom Search (déployable, sans navigateur).\n");
-  } else if (isAvailable()) {
-    console.log('Source : recherche par navigateur (repli local).');
-    console.log('  Pour un déploiement, renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID — voir le README.\n');
-  } else {
-    console.log('✗ Aucune source configurée.');
-    console.log('  Renseigne GOOGLE_API_KEY et GOOGLE_CSE_ID dans .env (voir le README),');
-    console.log('  ou installe Playwright : npm install && npx playwright install chromium\n');
+  const source = activeSource();
+  if (!source) {
+    console.log(`${describeSetup()}\n`);
     return;
   }
-
-  const searchWeb = useApi ? searchViaApi : searchViaBrowser;
+  const caveat = source.deployable ? '' : ' — non déployable en ligne';
+  console.log(`Source : ${source.label}${caveat}\n`);
+  const searchWeb = source.searchWeb;
 
   const collected = new Map();
   let totalResults = 0;

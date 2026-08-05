@@ -10,8 +10,8 @@ en faire un contenu.
 Au clic sur **Actualiser**, pour chaque star de `config/stars.json` :
 
 1. Envoie chaque requête de `articleQueries` à **Google**, avec son filtre de
-   récence (`recency`, « month » par défaut) — via l'API Custom Search, ou à
-   défaut en lisant la page de résultats dans un navigateur.
+   récence (`recency`, « month » par défaut) — via Serper ou l'API Custom
+   Search, ou à défaut en lisant la page de résultats dans un navigateur.
 2. Ne garde que les résultats qui parlent de vêtements, via le vocabulaire mode
    de `lib/fashionVocabulary.js`, et écarte les agrégateurs, YouTube et les
    réseaux sociaux.
@@ -87,15 +87,44 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 
 ## Variables d'environnement
 
+- `SERPER_API_KEY` — recherche Google via [serper.dev](https://serper.dev)
+- `GOOGLE_API_KEY`, `GOOGLE_CSE_ID` — recherche via l'API Custom Search
+- `GEMINI_API_KEY` — rédaction des brouillons (sinon, gabarit sans IA)
+- `SHOPMY_API_KEY`, `IMPACT_*` — liens d'affiliation
 - `PORT` — port HTTP (défaut `3000`)
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
   `30000`)
 
+Tout est optionnel sauf une source de recherche. `.env.example` liste chaque
+variable avec la marche à suivre.
+
 ## La recherche Google
 
-Deux chemins, selon que le projet tourne en local ou en ligne.
+- `SERPER_API_KEY` — option A, résultats Google contre une seule clé
+- `GOOGLE_API_KEY` + `GOOGLE_CSE_ID` — option B, API officielle Custom Search
 
-### API Custom Search — le chemin déployable
+Trois chemins, essayés dans cet ordre : Serper, puis Custom Search, puis le
+navigateur. Le premier configuré l'emporte ; `npm run diagnose` affiche lequel
+est actif.
+
+### Serper — le plus court chemin
+
+Serper interroge Google et renvoie ses résultats en JSON. Une seule clé, prise
+sur [serper.dev](https://serper.dev) : pas de projet Cloud, pas d'API à activer,
+pas de restrictions de clé — c'est-à-dire aucune des trois choses qui font
+échouer la mise en place de Custom Search. **2500 recherches offertes** à
+l'inscription, ce qui fait plus de 600 collectes.
+
+```bash
+SERPER_API_KEY=…   # dans .env
+npm run check-key  # vérifie la clé en une requête
+```
+
+Déployable exactement comme Custom Search : appel serveur, sans navigateur ni
+captcha. Les photos arrivent dans la réponse, une collecte prend quelques
+secondes.
+
+### API Custom Search — l'alternative officielle
 
 C'est l'API officielle de Google : du JSON, sans navigateur, sans captcha
 possible, **100 requêtes par jour gratuites**. C'est la seule option qui
@@ -120,13 +149,18 @@ Deux valeurs à mettre dans `.env` :
 L'ordre compte : une clé créée avant l'activation de l'API existe, mais Google
 refuse ses requêtes par un `403`.
 
-Google renvoie deux `403` différents, qui appellent des corrections opposées —
-le message affiché indique lequel :
+Google renvoie plusieurs `403` de libellés voisins mais de causes distinctes —
+`npm run check-key` affiche la réponse brute et son code `reason` :
 
 | Ce que dit Google | Ce qu'il faut faire |
 |---|---|
-| *…are blocked* | La clé a des **restrictions d'API**. Ouvre la clé par son **nom** dans les identifiants, section « Restrictions relatives aux API », choisis « Ne pas restreindre la clé » ou ajoute Custom Search API. |
-| *has not been used… or it is disabled* | L'API n'est **pas activée** sur ce projet. Vérifie aussi que la clé et l'API sont bien sur le **même** projet. |
+| *…are blocked* | La clé a des **restrictions d'API**. Ouvre la clé par son **nom** dans les identifiants, section « Restrictions relatives aux API », choisis « Ne pas restreindre la clé » ou coche Custom Search API. |
+| *has not been used… or it is disabled* | L'API n'est **pas activée** sur ce projet. |
+| *does not have the access to Custom Search JSON API* | L'activation n'a pas pris, ou la clé et l'API vivent dans **deux projets différents**. Le seul écran qui tranche : [les métriques de l'API](https://console.cloud.google.com/apis/api/customsearch.googleapis.com/metrics) — si elles s'affichent, l'API est bien activée sur le projet sélectionné en haut de page. |
+
+Ce dernier cas peut résister à toutes les corrections de la console. C'est
+précisément pour cela que Serper existe dans ce projet : il évite Google Cloud
+entièrement.
 
 L'API renvoie la photo de l'article dans sa réponse, ce qui évite d'ouvrir la
 page : une collecte prend alors quelques secondes.
