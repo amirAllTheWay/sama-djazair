@@ -93,28 +93,38 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 
 ## Le navigateur est requis
 
-La recherche Google n'a pas d'API gratuite, et sa page de résultats est rendue
+La recherche Google n'a pas d'API gratuite et sa page de résultats est rendue
 en JavaScript : seul un vrai navigateur peut la lire. Il sert aussi à ouvrir
 les articles pour y prendre la photo, ce qui règle au passage les `403` que
 plusieurs éditeurs opposent aux clients non-navigateurs.
 
-Playwright est déclaré en dépendance optionnelle. Il reste à installer Chromium
-une fois :
-
 ```bash
+npm install
 npx playwright install chromium
 ```
 
-Si Chrome est déjà sur la machine, renseigne `CHROMIUM_PATH` dans `.env` pour
-éviter le téléchargement. Sans navigateur disponible, rien ne casse : les
-articles Google s'affichent sans photo, et le terminal le rappelle au début de
-chaque collecte.
+### Si Google demande une vérification
 
-Le navigateur n'est plus optionnel : la recherche Google passe par lui. Sans
-Playwright, la collecte s'arrête et le dashboard le dit explicitement.
+C'est le point faible de l'approche : Google challenge ce qui ressemble à un
+robot. Trois réglages, actifs par défaut, réduisent fortement le risque :
 
-Compter environ 30 à 60 secondes par collecte — quatre recherches, puis une
-ouverture de page par article retenu.
+- **Un profil persistant** (`data/browser-profile/`) : les cookies obtenus à la
+  première visite sont réutilisés ensuite, ce qui distingue un visiteur qui
+  revient d'un script qui débarque.
+- **Le vrai Chrome de la machine** plutôt que le Chromium de Playwright, moins
+  reconnaissable. Repli automatique sur Chromium si Chrome est absent.
+- **Une fenêtre visible.** Le mode masqué est le signal de détection le plus
+  fort — et surtout, une fenêtre visible permet de résoudre la vérification à
+  la main. La collecte attend alors jusqu'à 3 minutes, puis reprend seule. Grâce
+  au profil persistant, c'est demandé une fois, pas à chaque collecte.
+
+Les recherches sont par ailleurs espacées de 2,5 à 5 secondes : quatre requêtes
+d'affilée est en soi un signal.
+
+Une fois que les collectes passent sans être challengées, `BROWSER_HEADLESS=true`
+dans `.env` masque la fenêtre.
+
+Compter environ 40 à 80 secondes par collecte.
 
 ## Créer un article depuis une carte
 

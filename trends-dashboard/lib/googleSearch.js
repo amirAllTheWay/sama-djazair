@@ -8,6 +8,10 @@ const { withPage } = require('./browserResolver');
 
 const RESULTS_PER_QUERY = 12;
 
+// Long enough to actually solve a challenge without rushing, short enough that
+// an unattended run gives up rather than hanging.
+const CAPTCHA_WAIT_MS = Number(process.env.CAPTCHA_WAIT_MS || 180_000);
+
 // Aggregators, video and social hosts: they rank well for a celebrity name but
 // never carry the written coverage the board is built on.
 const JUNK_HOSTS =
@@ -50,19 +54,56 @@ async function dismissConsent(page) {
 }
 
 
+// Four searches fired back to back is itself a bot signal, so they are paced
+// with a human-ish, slightly irregular gap.
+let lastSearchAt = 0;
+async function pace() {
+  const gap = 2500 + Math.random() * 2500;
+  const wait = lastSearchAt + gap - Date.now();
+  if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+  lastSearchAt = Date.now();
+}
+
+function isCaptcha(page) {
+  return /sorry\/index|\/sorry\//.test(page.url());
+}
+
 async function searchWeb(query, { recency = 'month' } = {}) {
+  await pace();
+
   return withPage(async (page) => {
     await page.goto(buildUrl(query, recency), { waitUntil: 'domcontentloaded', timeout: 25_000 });
 
-    if (/consent\.google|sorry\/index/.test(page.url())) {
+    if (/consent\.google/.test(page.url())) {
       await dismissConsent(page);
       await page.goto(buildUrl(query, recency), { waitUntil: 'domcontentloaded', timeout: 25_000 });
     } else {
       await dismissConsent(page);
     }
 
-    if (/sorry\/index/.test(page.url())) {
-      throw new Error('Google a présenté un captcha — réessaie dans quelques minutes.');
+    if (isCaptcha(page)) {
+      if (process.env.BROWSER_HEADLESS === 'true') {
+        throw new Error(
+          'Google a présenté un captcha, et la fenêtre est masquée. Retire ' +
+            'BROWSER_HEADLESS=true de .env pour pouvoir le résoudre à la main une fois.'
+        );
+      }
+
+      // The window is visible, so the challenge can be solved by hand — and the
+      // persistent profile keeps the resulting cookie, so it is asked once, not
+      // once per run. Waiting is the whole point; failing here would waste it.
+      console.log(
+        `\n[google] Vérification demandée. Résous-la dans la fenêtre du navigateur — ` +
+          `${CAPTCHA_WAIT_MS / 1000}s d'attente, puis la collecte reprend seule.\n`
+      );
+      await page
+        .waitForURL((url) => !/\/sorry\//.test(url.toString()), { timeout: CAPTCHA_WAIT_MS })
+        .catch(() => {});
+
+      if (isCaptcha(page)) {
+        throw new Error('Vérification Google non résolue — relance quand tu es disponible.');
+      }
+      await page.goto(buildUrl(query, recency), { waitUntil: 'domcontentloaded', timeout: 25_000 });
     }
 
     await page.waitForSelector('#search a h3, #rso a h3', { timeout: 10_000 }).catch(() => {});

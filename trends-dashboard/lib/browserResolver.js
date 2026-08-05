@@ -1,14 +1,19 @@
-// Google News relay links resolve only by executing their page's JavaScript,
-// and several publishers answer 403 to anything that is not a browser. Driving
-// a real one solves both, at the cost of a heavyweight optional dependency —
-// so everything here degrades to "unavailable" rather than throwing when
-// Playwright is not installed.
+// Google captchas a browser that looks automated. Three things make the
+// difference, and all three are on by default here: a profile that persists
+// between runs so cookies build up like a real user's, the machine's actual
+// Chrome rather than Playwright's bundled build, and a visible window —
+// headless is the single strongest detection signal.
 
-const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS || 20_000);
-const IDLE_SHUTDOWN_MS = 30_000;
+const path = require('path');
+
+const NAV_TIMEOUT_MS = Number(process.env.BROWSER_TIMEOUT_MS || 25_000);
+const IDLE_SHUTDOWN_MS = 60_000;
+const PROFILE_DIR = path.join(__dirname, '..', 'data', 'browser-profile');
+
+const HEADLESS = process.env.BROWSER_HEADLESS === 'true';
 
 let playwrightModule;
-let browserPromise = null;
+let contextPromise = null;
 let idleTimer = null;
 
 function loadPlaywright() {
@@ -25,32 +30,57 @@ function isAvailable() {
   return Boolean(loadPlaywright());
 }
 
-async function getBrowser() {
+// A persistent context is a browser and a profile at once: the cookies Google
+// sets on the first visit are still there on the next run, which is most of
+// what separates a returning visitor from a script.
+async function getContext() {
   const playwright = loadPlaywright();
   if (!playwright) return null;
 
-  if (!browserPromise) {
-    // CHROMIUM_PATH points at a Chrome or Chromium already on the machine,
-    // which saves downloading Playwright's own ~300 MB copy.
-    const launchOptions = {
-      headless: true,
+  if (!contextPromise) {
+    const options = {
+      headless: HEADLESS,
+      viewport: { width: 1280, height: 900 },
+      locale: 'en-US',
+      timezoneId: 'America/New_York',
       args: ['--disable-blink-features=AutomationControlled'],
     };
-    if (process.env.CHROMIUM_PATH) launchOptions.executablePath = process.env.CHROMIUM_PATH;
 
-    browserPromise = playwright.chromium.launch(launchOptions).catch((err) => {
-      browserPromise = null;
-      throw new Error(
-        `Chromium n'a pas pu démarrer (${err.message.split('\n')[0]}). ` +
-          'Lance « npx playwright install chromium », ou renseigne CHROMIUM_PATH dans .env.'
-      );
-    });
+    if (process.env.CHROMIUM_PATH) {
+      options.executablePath = process.env.CHROMIUM_PATH;
+    } else {
+      // Real Chrome carries the branding and components a stock Chromium
+      // build lacks, and is markedly less likely to be challenged.
+      options.channel = 'chrome';
+    }
+
+    contextPromise = playwright.chromium
+      .launchPersistentContext(PROFILE_DIR, options)
+      .catch(async (err) => {
+        // No system Chrome: fall back to whatever Playwright installed.
+        if (options.channel) {
+          delete options.channel;
+          try {
+            return await playwright.chromium.launchPersistentContext(PROFILE_DIR, options);
+          } catch (retryErr) {
+            contextPromise = null;
+            throw describeLaunchFailure(retryErr);
+          }
+        }
+        contextPromise = null;
+        throw describeLaunchFailure(err);
+      });
   }
-  return browserPromise;
+  return contextPromise;
 }
 
-// Launching costs a second or two, so the instance is shared across a fetch
-// cycle and only torn down once nothing has needed it for a while.
+function describeLaunchFailure(err) {
+  return new Error(
+    `Chromium n'a pas pu démarrer (${err.message.split('\n')[0]}). ` +
+      'Lance « npx playwright install chromium », ou renseigne CHROMIUM_PATH dans .env.'
+  );
+}
+
 function scheduleIdleShutdown() {
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => void closeBrowser(), IDLE_SHUTDOWN_MS);
@@ -59,8 +89,8 @@ function scheduleIdleShutdown() {
 
 async function closeBrowser() {
   clearTimeout(idleTimer);
-  const pending = browserPromise;
-  browserPromise = null;
+  const pending = contextPromise;
+  contextPromise = null;
   if (!pending) return;
   try {
     (await pending).close();
@@ -83,24 +113,16 @@ function metaFrom(html, keys) {
   return null;
 }
 
-// Opens the link, lets the redirect run, and reads the article page it lands
-// on. Returns null when the browser is unavailable so callers can fall back.
-// Every browser task wants the same setup — own context, no images or fonts,
-// guaranteed teardown — so it lives here once.
+// The profile is shared, so pages are opened and closed within it rather than
+// spinning up a fresh context each time, which would discard
+// the cookies that keep Google satisfied.
 async function withPage(task) {
-  const browser = await getBrowser();
-  if (!browser) return null;
+  const context = await getContext();
+  if (!context) return null;
 
   scheduleIdleShutdown();
-  const context = await browser.newContext({
-    locale: 'en-US',
-    viewport: { width: 1280, height: 900 },
-    userAgent:
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-  });
-
+  const page = await context.newPage();
   try {
-    const page = await context.newPage();
     // Images and fonts are never read; skipping them cuts page time a lot.
     await page.route('**/*', (route) =>
       ['image', 'media', 'font'].includes(route.request().resourceType())
@@ -109,7 +131,7 @@ async function withPage(task) {
     );
     return await task(page);
   } finally {
-    await context.close().catch(() => {});
+    await page.close().catch(() => {});
   }
 }
 
@@ -117,21 +139,9 @@ async function resolveInBrowser(url) {
   return withPage(async (page) => {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: NAV_TIMEOUT_MS });
 
-    // The relay page redirects via script; wait for the URL to leave Google.
-    if (/news\.google\.com/.test(page.url())) {
-      await page
-        .waitForURL((current) => !/news\.google\.com/.test(current.toString()), {
-          timeout: NAV_TIMEOUT_MS,
-        })
-        .catch(() => {});
-    }
-
-    const finalUrl = page.url();
-    if (/news\.google\.com/.test(finalUrl)) return null;
-
     const html = await page.content();
     return {
-      url: finalUrl,
+      url: page.url(),
       image: metaFrom(html, ['og:image', 'twitter:image', 'twitter:image:src']),
       summary: metaFrom(html, ['og:description', 'twitter:description', 'description']),
       source: metaFrom(html, ['og:site_name']),
@@ -139,4 +149,4 @@ async function resolveInBrowser(url) {
   });
 }
 
-module.exports = { resolveInBrowser, withPage, closeBrowser, isAvailable };
+module.exports = { resolveInBrowser, withPage, closeBrowser, isAvailable, PROFILE_DIR };
