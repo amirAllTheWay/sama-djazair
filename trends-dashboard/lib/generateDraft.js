@@ -1,6 +1,6 @@
 const { affiliateLinksFor, configuredProviders } = require('./affiliate');
+const aiProvider = require('./aiProvider');
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 function formatLinks(links) {
   return links
@@ -42,7 +42,7 @@ ${links.length ? formatLinks(links) : 'Aucune pièce identifiée automatiquement
 À écrire : une phrase d'ouverture qui donne envie de rester sur la vidéo.
 
 ---
-*Brouillon généré sans IA — aucune clé GEMINI_API_KEY configurée.*
+*Brouillon généré sans IA — aucune clé GEMINI_API_KEY ni GROQ_API_KEY configurée.*
 `;
 }
 
@@ -74,74 +74,31 @@ CONSIGNES
 - N'invente aucun prix, aucune référence produit, aucune déclaration de la star.`;
 }
 
-async function callGemini(prompt, apiKey) {
-  const https = require('https');
-  const payload = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] });
-
-  return new Promise((resolve, reject) => {
-    const req = https.request(
-      {
-        host: 'generativelanguage.googleapis.com',
-        path: `/v1beta/models/${GEMINI_MODEL}:generateContent`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          'x-goog-api-key': apiKey,
-        },
-      },
-      (res) => {
-        let body = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => (body += chunk));
-        res.on('end', () => {
-          if (res.statusCode >= 400) {
-            return reject(new Error(`Gemini a répondu HTTP ${res.statusCode} : ${body.slice(0, 200)}`));
-          }
-          try {
-            const parsed = JSON.parse(body);
-            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (!text) return reject(new Error('Gemini a renvoyé une réponse vide.'));
-            resolve(text);
-          } catch (err) {
-            reject(new Error(`Réponse Gemini illisible : ${err.message}`));
-          }
-        });
-      }
-    );
-    req.setTimeout(45_000, () => req.destroy(new Error('Délai dépassé')));
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
 
 async function generateDraft(article) {
   const links = await affiliateLinksFor(article);
-  const apiKey = process.env.GEMINI_API_KEY;
 
   const meta = {
     affiliateProviders: configuredProviders(),
     affiliateLinks: links,
-    generatedBy: apiKey ? `Gemini (${GEMINI_MODEL})` : 'modèle local (sans IA)',
+    generatedBy: 'modèle local (sans IA)',
   };
 
-  if (!apiKey) {
+  if (!aiProvider.isConfigured()) {
     return { ...meta, markdown: templateDraft(article, links) };
   }
 
   try {
-    const markdown = await callGemini(buildPrompt(article, links), apiKey);
-    return { ...meta, markdown };
+    const { text, provider } = await aiProvider.complete(buildPrompt(article, links));
+    return { ...meta, generatedBy: provider, markdown: text };
   } catch (err) {
     // A failed generation should still hand back something usable.
     return {
       ...meta,
-      generatedBy: 'modèle local (sans IA)',
       warning: `Génération IA échouée — ${err.message}`,
       markdown: templateDraft(article, links),
     };
   }
 }
 
-module.exports = { generateDraft, templateDraft, buildPrompt, callGemini };
+module.exports = { generateDraft, templateDraft, buildPrompt };

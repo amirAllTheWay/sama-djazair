@@ -4,11 +4,9 @@
 // model is asked to read the piece out of the text rather than to guess from
 // the image, which it never sees.
 
-const { callGemini } = require('./generateDraft');
+const aiProvider = require('./aiProvider');
 const { linkForQuery, configuredProviders } = require('./affiliate');
 const { garmentTerms } = require('./fashionVocabulary');
-
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 function buildPrompt({ article, look }) {
   return `Tu es un rédacteur mode chargé d'identifier précisément une pièce portée par une célébrité.
@@ -85,22 +83,19 @@ function withoutAi({ article, look }) {
 }
 
 async function identifyPiece({ article, look }) {
-  const apiKey = process.env.GEMINI_API_KEY;
-
   let identification;
-  let identifiedBy;
+  let identifiedBy = 'légende de la photo (sans IA)';
   let warning;
 
-  if (!apiKey) {
+  if (!aiProvider.isConfigured()) {
     identification = withoutAi({ article, look });
-    identifiedBy = 'légende de la photo (sans IA)';
   } else {
     try {
-      identification = parseJson(await callGemini(buildPrompt({ article, look }), apiKey));
-      identifiedBy = `Gemini (${GEMINI_MODEL})`;
+      const { text, provider } = await aiProvider.complete(buildPrompt({ article, look }));
+      identification = parseJson(text);
+      identifiedBy = provider;
     } catch (err) {
       identification = withoutAi({ article, look });
-      identifiedBy = 'légende de la photo (sans IA)';
       warning = `Identification IA échouée — ${err.message}`;
     }
   }

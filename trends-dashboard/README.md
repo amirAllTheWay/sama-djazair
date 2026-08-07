@@ -130,7 +130,7 @@ Où ». Une entrée précise peut absorber une générique via `absorbs`, pour q
 
 - `SERPER_API_KEY` — recherche Google via [serper.dev](https://serper.dev)
 - `GOOGLE_API_KEY`, `GOOGLE_CSE_ID` — recherche via l'API Custom Search
-- `GEMINI_API_KEY` — rédaction des brouillons (sinon, gabarit sans IA)
+- `GEMINI_API_KEY` / `GROQ_API_KEY` — IA (sinon, tout marche sans)
 - `SHOPMY_API_KEY`, `IMPACT_*` — liens d'affiliation
 - `PORT` — port HTTP (défaut `3000`)
 - `REFRESH_COOLDOWN_MS` — délai minimum entre deux actualisations (défaut
@@ -258,10 +258,32 @@ fausse, puisque le modèle ne voit jamais l'image, seulement le texte.
 Les deux pièces — l'originale et l'alternative — reçoivent chacune un lien
 d'affiliation via `lib/affiliate.js`.
 
-Sans `GEMINI_API_KEY`, le bouton fonctionne quand même : la marque et la pièce
-sont lues dans la légende, sans IA, et c'est indiqué dans le panneau. Les
-requêtes d'achat partent alors en anglais (`garmentTerms`) et non avec le
-libellé français affiché, puisque les marchands visés sont américains.
+Sans clé IA, le bouton fonctionne quand même : la marque et la pièce sont lues
+dans la légende, sans IA, et c'est indiqué dans le panneau. Les requêtes
+d'achat partent alors en anglais (`garmentTerms`) et non avec le libellé
+français affiché, puisque les marchands visés sont américains.
+
+### Les deux fournisseurs IA
+
+`lib/aiProvider.js` essaie **Gemini** puis **Groq**, et bascule sur le second
+quand le premier échoue — même principe que Serper face à Custom Search, et
+pour la même raison : le quota gratuit de Gemini dépend du projet Cloud lié à
+la clé, et un projet sans allocation renvoie un `429` que rien ne débloque de
+l'extérieur.
+
+- `GEMINI_API_KEY` — [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+- `GROQ_API_KEY` — [console.groq.com/keys](https://console.groq.com/keys),
+  sans projet Cloud ni facturation
+
+`npm run check-ai` interroge chaque fournisseur configuré et affiche la
+réponse complète. Sur un `429` Gemini, le message distingue les trois cas, que
+Google formule presque identiquement :
+
+| Ce qui se passe | Ce que ça veut dire |
+|---|---|
+| Limite **par minute** | Passagère — le code attend le délai indiqué et réessaie tout seul. |
+| Quota **du jour** épuisé | Se réinitialise sous 24 h. Groq prend le relais entre-temps. |
+| **Aucun quota** | Le projet lié à la clé n'a pas d'allocation gratuite pour ce modèle. Attendre n'y change rien : il faut une clé d'un autre projet, un autre `GEMINI_MODEL`, ou Groq. |
 
 ## Créer un article depuis une carte
 
