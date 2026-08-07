@@ -12,13 +12,30 @@ const https = require('https');
 // the garment", which is not a hard task.
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 
-const isConfigured = () => Boolean(process.env.GROQ_API_KEY);
-const modelName = () => process.env.GROQ_MODEL || DEFAULT_MODEL;
+// The text model is blind, and answering "what is he wearing" without seeing
+// the photo is how a shirt-and-trousers shot gets called a handbag. A separate
+// model is used whenever an image is sent.
+const DEFAULT_VISION_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
-function post(prompt, apiKey, model) {
+const isConfigured = () => Boolean(process.env.GROQ_API_KEY);
+const modelName = (withPhoto = false) =>
+  withPhoto
+    ? process.env.GROQ_VISION_MODEL || DEFAULT_VISION_MODEL
+    : process.env.GROQ_MODEL || DEFAULT_MODEL;
+
+function post(prompt, apiKey, model, photo) {
+  // Groq follows the OpenAI shape: the content becomes a list of parts as soon
+  // as an image is attached.
+  const content = photo
+    ? [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:${photo.mimeType};base64,${photo.base64}` } },
+      ]
+    : prompt;
+
   const payload = JSON.stringify({
     model,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: 'user', content }],
     temperature: 0.7,
   });
 
@@ -48,12 +65,12 @@ function post(prompt, apiKey, model) {
   });
 }
 
-async function complete(prompt) {
+async function complete(prompt, { photo = null } = {}) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY n'est pas renseigné.");
-  const model = modelName();
+  const model = modelName(Boolean(photo));
 
-  const { statusCode, body } = await post(prompt, apiKey, model);
+  const { statusCode, body } = await post(prompt, apiKey, model, photo);
 
   let parsed = null;
   try {

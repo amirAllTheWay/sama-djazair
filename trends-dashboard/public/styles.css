@@ -401,3 +401,39 @@ a.article-title { text-decoration: none; color: inherit; display: block; }
 a.article-title:hover { color: var(--accent-deep); }
 a.article-title:focus-visible,
 a.article-image:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.piece-visible {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--ink);
+  padding: 0.55rem 0.7rem;
+  background: var(--surface-2);
+  border-left: 2px solid var(--accent);
+  border-radius: 0 7px 7px 0;
+}
+
+/* Une pièce de la tenue : ce que c'est, et où l'acheter. */
+.piece-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.piece-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.7rem; }
+.piece-confidence {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.confidence-élevée { background: var(--rising-tint); color: var(--rising); }
+.confidence-faible { background: var(--error-tint); color: var(--error); }

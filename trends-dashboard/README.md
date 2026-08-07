@@ -244,22 +244,34 @@ le même vocabulaire mode que les cartes. À défaut, la légende elle-même.
 Cette lecture n'est faite que pour les cinq articles affichés — cinq requêtes
 par collecte, pas une par candidat.
 
-### Retrouver la pièce
+### Retrouver les pièces
 
-Le bouton sous chaque photo interroge le modèle sur cette photo précise. Le
-prompt lui donne le titre, le résumé, la légende et les marques déjà repérées,
-et lui demande un JSON : la pièce, la maison, le modèle, un indice de
-confiance, et une alternative nettement moins chère en enseigne accessible.
+Le bouton sous chaque photo **envoie l'image au modèle**, qui répond par la
+liste des vêtements qu'il y voit : haut, bas, chaussures, veste, accessoires.
+Chaque pièce arrive avec sa maison si elle est identifiable, un indice de
+confiance, une alternative en enseigne accessible, et deux liens d'achat.
 
-Il lui est explicitement interdit d'inventer une marque absente de l'article —
-c'est `null` et une confiance « faible » plutôt qu'une réponse plausible et
-fausse, puisque le modèle ne voit jamais l'image, seulement le texte.
+L'image est déterminante. Le modèle recevait auparavant le seul texte de
+l'article, et un papier citant Bottega Veneta et parlant de sacs lui faisait
+répondre « sac à main » — avec une confiance élevée — sur une photo montrant
+une chemise et un pantalon. La marque était bien citée ; elle ne l'était
+simplement pas à propos de cette photo.
 
-Les deux pièces — l'originale et l'alternative — reçoivent chacune un lien
-d'affiliation via `lib/affiliate.js`.
+Le contexte de l'article est donc explicitement présenté comme tel dans le
+prompt : *« décrit l'article entier, pas forcément cette photo »*. Une marque
+n'est retenue que si la **légende de cette photo** la nomme, ou si le logo est
+lisible sur l'image ; sinon `null`. Et le panneau affiche ce que le modèle dit
+voir, ce qui rend une erreur immédiatement visible au lieu d'être seulement
+surprenante.
 
-Sans clé IA, le bouton fonctionne quand même : la marque et la pièce sont lues
-dans la légende, sans IA, et c'est indiqué dans le panneau. Les requêtes
+`lib/photoInput.js` charge l'image en binaire (jusqu'à 4 Mo, formats courants)
+et la transmet en base64 : `inline_data` chez Gemini, `image_url` chez Groq.
+Groq bascule alors sur un modèle de vision (`GROQ_VISION_MODEL`), son modèle
+texte par défaut étant aveugle. Si la photo ne peut pas être chargée, le
+modèle répond d'après le texte seul et le panneau le signale.
+
+Sans clé IA, le bouton fonctionne quand même : les pièces sont lues dans la
+légende, sans analyse de l'image, et c'est indiqué dans le panneau. Les requêtes
 d'achat partent alors en anglais (`garmentTerms`) et non avec le libellé
 français affiché, puisque les marchands visés sont américains.
 

@@ -7,40 +7,74 @@
 const aiProvider = require('./aiProvider');
 const { linkForQuery, configuredProviders } = require('./affiliate');
 const { garmentTerms } = require('./fashionVocabulary');
+const { loadPhoto } = require('./photoInput');
 
-function buildPrompt({ article, look }) {
-  return `Tu es un rédacteur mode chargé d'identifier précisément une pièce portée par une célébrité.
+// A full outfit rarely has more than this, and each entry costs two affiliate
+// lookups.
+const MAX_PIECES = 6;
 
-ARTICLE
+function buildPrompt({ article, look, hasPhoto }) {
+  const visual = hasPhoto
+    ? `L'IMAGE JOINTE EST LA PHOTO À ANALYSER. Elle fait autorité sur ce qui est porté.
+Décris d'abord ce que tu vois réellement, puis identifie LA PIÈCE LA PLUS MARQUANTE de cette tenue.`
+    : `AUCUNE IMAGE n'a pu être chargée : appuie-toi uniquement sur la légende ci-dessous.
+Si la légende ne décrit pas de vêtement précis, réponds avec "confidence": "faible".`;
+
+  return `Tu es un rédacteur mode chargé d'identifier une pièce portée par une célébrité sur une photo précise.
+
+${visual}
+
+LÉGENDE DE CETTE PHOTO
+${look.caption || '(aucune légende)'}
+Marques repérées dans cette légende : ${(look.brands || []).join(', ') || '(aucune)'}
+
+CONTEXTE DE L'ARTICLE (attention : décrit l'article entier, pas forcément cette photo)
 Titre : ${article.title}
 Média : ${article.source || article.domain || 'inconnu'}
 Résumé : ${article.summary || '(aucun)'}
-Marques citées dans l'article : ${(article.brands || []).join(', ') || '(aucune)'}
-Pièces citées dans l'article : ${(article.garments || []).join(', ') || '(aucune)'}
-
-PHOTO À IDENTIFIER
-Légende : ${look.caption || '(aucune légende)'}
-Marques repérées dans la légende : ${(look.brands || []).join(', ') || '(aucune)'}
-Pièces repérées dans la légende : ${(look.garments || []).join(', ') || '(aucune)'}
+Marques citées quelque part dans l'article : ${(article.brands || []).join(', ') || '(aucune)'}
+Pièces citées quelque part dans l'article : ${(article.garments || []).join(', ') || '(aucune)'}
 
 Réponds UNIQUEMENT par un objet JSON valide, sans texte autour, sans balises de code, à ce format exact :
 {
-  "piece": "nom court de la pièce en français, ex: Blouson en cuir noir",
-  "brand": "la maison, ou null si l'article ne la nomme pas",
-  "model": "le nom du modèle si l'article le donne, sinon null",
-  "confidence": "élevée | moyenne | faible",
-  "reasoning": "une phrase expliquant sur quoi tu t'appuies",
-  "searchQuery": "requête d'achat en anglais pour trouver la pièce d'origine",
-  "alternative": {
-    "description": "une pièce très proche mais nettement moins chère, en français",
-    "searchQuery": "requête d'achat en anglais pour cette alternative abordable"
-  }
+  "visible": "ce que tu vois sur la photo, en une phrase française",
+  "pieces": [
+    {
+      "piece": "nom court en français, ex: Pantalon à pinces beige",
+      "brand": "la maison, ou null",
+      "model": "le nom du modèle, ou null",
+      "confidence": "élevée | moyenne | faible",
+      "reasoning": "une phrase : sur quoi tu t'appuies",
+      "searchQuery": "requête d'achat en anglais pour cette pièce",
+      "alternative": {
+        "description": "une pièce très proche mais nettement moins chère, en français",
+        "searchQuery": "requête d'achat en anglais pour cette alternative abordable"
+      }
+    }
+  ]
 }
 
-Règles :
-- N'invente jamais une marque ni un modèle absents de l'article : mets null.
-- "confidence" vaut "faible" si la marque n'est pas nommée dans l'article.
-- L'alternative doit viser une enseigne accessible (Uniqlo, COS, Zara, Arket, Mango, Massimo Dutti…) et ne jamais être la même marque que l'originale.`;
+RÈGLES IMPÉRATIVES
+- Liste TOUTES les pièces d'habillement visibles sur la photo, de la plus
+  marquante à la moins marquante : haut, bas, chaussures, veste, accessoires
+  (lunettes, montre, sac, ceinture). Entre 2 et 6 entrées.
+- Chaque "piece" doit être RÉELLEMENT VISIBLE sur l'image. Ne liste jamais une
+  pièce citée dans l'article mais absente de la photo : si l'article parle d'un
+  sac et que la photo montre une chemise et un pantalon, tu listes la chemise
+  et le pantalon, pas le sac.
+- Décris chaque pièce précisément : type, couleur, matière, coupe. « Pantalon à
+  pinces beige à jambe large » et non « pantalon ».
+- "brand" n'est renseigné que si la marque est nommée dans la LÉGENDE de cette
+  photo, ou si le logo est lisible sur l'image. Une marque citée ailleurs dans
+  l'article ne prouve pas qu'elle est portée ici : mets null.
+- "model" n'est renseigné que si le texte le donne explicitement, sinon null.
+- "confidence" : "élevée" seulement si la pièce est nettement visible ET que sa
+  marque est nommée dans la légende. "moyenne" si la pièce est visible sans
+  marque certaine. "faible" dans tous les autres cas.
+- L'alternative doit viser une enseigne accessible (Uniqlo, COS, Zara, Arket,
+  Mango, Massimo Dutti…) et ne jamais être la même marque que l'originale.
+- Les "searchQuery" décrivent le VÊTEMENT (type, couleur, matière, coupe),
+  jamais la célébrité.`;
 }
 
 // The model is asked for bare JSON, but wrapping it in a code fence is the
@@ -60,26 +94,32 @@ function parseJson(text) {
 // garment; that is a weaker answer than the model's but a real one, and it
 // keeps the button working rather than greying it out.
 function withoutAi({ article, look }) {
-  const brand = look.brands?.[0] || article.brands?.[0] || null;
-  const garment = look.garments?.[0] || article.garments?.[0] || null;
-  const piece = [brand, garment].filter(Boolean).join(' ') || look.caption || article.title;
+  const brand = look.brands?.[0] || look.garments?.length ? look.brands?.[0] : article.brands?.[0];
+  const garments = look.garments?.length ? look.garments : article.garments || [];
 
-  // The label is French for display; the query has to be the English term the
-  // caption actually used, since the merchants are American.
-  const term = garmentTerms(`${look.caption || ''} ${article.title}`)[0] || garment;
+  // The labels are French for display; the queries have to use the English
+  // terms the caption actually contained, since the merchants are American.
+  const terms = garmentTerms(`${look.caption || ''} ${article.title}`);
 
-  return {
-    piece: garment || piece,
-    brand,
-    model: null,
-    confidence: brand && garment ? 'moyenne' : 'faible',
-    reasoning: "Lu directement dans la légende de la photo, sans IA (aucune clé GEMINI_API_KEY configurée).",
-    searchQuery: [brand, term].filter(Boolean).join(' ') || piece,
-    alternative: {
-      description: garment ? `${garment} similaire en enseigne accessible` : 'Pièce similaire abordable',
-      searchQuery: term ? `affordable ${term}` : `affordable ${piece}`,
-    },
-  };
+  const pieces = (garments.length ? garments : [look.caption || article.title]).map(
+    (garment, index) => {
+      const term = terms[index] || terms[0] || garment;
+      return {
+        piece: garment,
+        brand: brand || null,
+        model: null,
+        confidence: brand && garments.length ? 'moyenne' : 'faible',
+        reasoning: 'Lu dans la légende de la photo, sans IA — la photo elle-même n’a pas été analysée.',
+        searchQuery: [brand, term].filter(Boolean).join(' ') || garment,
+        alternative: {
+          description: `${garment} similaire en enseigne accessible`,
+          searchQuery: `affordable ${term || garment}`,
+        },
+      };
+    }
+  );
+
+  return { visible: look.caption || null, pieces };
 }
 
 async function identifyPiece({ article, look }) {
@@ -90,34 +130,58 @@ async function identifyPiece({ article, look }) {
   if (!aiProvider.isConfigured()) {
     identification = withoutAi({ article, look });
   } else {
+    // The photo is the evidence; the text alone produced confident answers
+    // about garments that were not in the frame.
+    let photo = null;
+    let photoNote = null;
     try {
-      const { text, provider } = await aiProvider.complete(buildPrompt({ article, look }));
+      photo = await loadPhoto(look.image);
+    } catch (err) {
+      photoNote = `Photo non analysée (${err.message}) — identification d'après le texte seul.`;
+    }
+
+    try {
+      const prompt = buildPrompt({ article, look, hasPhoto: Boolean(photo) });
+      const { text, provider } = await aiProvider.complete(prompt, { photo });
       identification = parseJson(text);
-      identifiedBy = provider;
+      identifiedBy = photo ? `${provider}, d'après la photo` : `${provider}, texte seul`;
+      if (photoNote) warning = photoNote;
     } catch (err) {
       identification = withoutAi({ article, look });
       warning = `Identification IA échouée — ${err.message}`;
     }
   }
 
-  // Both the original and the cheaper stand-in get a shoppable link, so the
-  // card answers "where do I buy this" either way.
-  const [original, alternative] = await Promise.all([
-    linkForQuery(identification.searchQuery || identification.piece || article.title),
-    linkForQuery(identification.alternative?.searchQuery || `affordable ${identification.piece || ''}`),
-  ]);
+  // Each garment gets both a link to the real thing and one to an affordable
+  // stand-in, so every line of the list is directly shoppable.
+  const listed = (identification.pieces || []).filter((entry) => entry?.piece).slice(0, MAX_PIECES);
+
+  const pieces = await Promise.all(
+    listed.map(async (entry) => {
+      const [original, alternative] = await Promise.all([
+        linkForQuery(entry.searchQuery || entry.piece),
+        linkForQuery(entry.alternative?.searchQuery || `affordable ${entry.piece}`),
+      ]);
+      return {
+        piece: entry.piece,
+        brand: entry.brand || null,
+        model: entry.model || null,
+        confidence: entry.confidence || 'faible',
+        reasoning: entry.reasoning || null,
+        original,
+        alternative: { ...alternative, description: entry.alternative?.description || null },
+      };
+    })
+  );
 
   return {
     identifiedBy,
     warning,
     affiliateProviders: configuredProviders(),
-    piece: identification.piece || null,
-    brand: identification.brand || null,
-    model: identification.model || null,
-    confidence: identification.confidence || 'faible',
-    reasoning: identification.reasoning || null,
-    original,
-    alternative: { ...alternative, description: identification.alternative?.description || null },
+    // What the model says it saw, so a wrong answer is visibly wrong rather
+    // than merely surprising.
+    visible: identification.visible || null,
+    pieces,
   };
 }
 

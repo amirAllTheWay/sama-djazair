@@ -224,6 +224,38 @@ function shopRow(heading, entry) {
   return row;
 }
 
+// One garment from the photo: what it is, and the two ways to buy it.
+function pieceBlock(piece) {
+  const block = document.createElement('div');
+  block.className = 'piece-block';
+
+  const head = document.createElement('div');
+  head.className = 'piece-head';
+
+  const name = document.createElement('p');
+  name.className = 'piece-name';
+  name.textContent = [piece.brand, piece.model, piece.piece].filter(Boolean).join(' · ');
+  head.appendChild(name);
+
+  const badge = document.createElement('span');
+  badge.className = `piece-confidence confidence-${piece.confidence || 'faible'}`;
+  badge.textContent = piece.confidence || 'faible';
+  head.appendChild(badge);
+  block.appendChild(head);
+
+  if (piece.reasoning) {
+    const why = document.createElement('p');
+    why.className = 'piece-why';
+    why.textContent = piece.reasoning;
+    block.appendChild(why);
+  }
+
+  block.appendChild(shopRow("La pièce d'origine", piece.original));
+  block.appendChild(shopRow('Une alternative moins chère', piece.alternative));
+
+  return block;
+}
+
 function openLookPanel(payload, look) {
   document.getElementById('draft-panel')?.remove();
 
@@ -238,7 +270,7 @@ function openLookPanel(payload, look) {
   head.className = 'draft-head';
   const heading = document.createElement('p');
   heading.className = 'draft-title';
-  heading.textContent = payload.error ? 'Identification impossible' : 'La pièce sur la photo';
+  heading.textContent = payload.error ? 'Identification impossible' : 'Les pièces sur la photo';
   head.appendChild(heading);
 
   const close = document.createElement('button');
@@ -262,21 +294,20 @@ function openLookPanel(payload, look) {
     preview.alt = '';
     inner.appendChild(preview);
 
-    const name = document.createElement('p');
-    name.className = 'piece-name';
-    name.textContent = [payload.brand, payload.model, payload.piece].filter(Boolean).join(' · ');
-    inner.appendChild(name);
-
     const meta = document.createElement('p');
     meta.className = 'draft-meta';
-    meta.textContent = `Identifié par ${payload.identifiedBy} · confiance ${payload.confidence}`;
+    // Confidence is stated per garment now, not once for the whole photo.
+    const count = payload.pieces?.length || 0;
+    meta.textContent = `Identifié par ${payload.identifiedBy} · ${count} pièce${count > 1 ? 's' : ''}`;
     inner.appendChild(meta);
 
-    if (payload.reasoning) {
-      const why = document.createElement('p');
-      why.className = 'piece-why';
-      why.textContent = payload.reasoning;
-      inner.appendChild(why);
+    // What the model reports seeing, next to the photo: the quickest way to
+    // catch an answer that describes something other than this image.
+    if (payload.visible) {
+      const seen = document.createElement('p');
+      seen.className = 'piece-visible';
+      seen.textContent = `Sur la photo : ${payload.visible}`;
+      inner.appendChild(seen);
     }
 
     if (payload.warning) {
@@ -286,8 +317,14 @@ function openLookPanel(payload, look) {
       inner.appendChild(warn);
     }
 
-    inner.appendChild(shopRow("La pièce d'origine", payload.original));
-    inner.appendChild(shopRow('Une alternative moins chère', payload.alternative));
+    if (!payload.pieces?.length) {
+      const none = document.createElement('p');
+      none.className = 'block-empty';
+      none.textContent = 'Aucune pièce identifiée sur cette photo.';
+      inner.appendChild(none);
+    }
+
+    payload.pieces?.forEach((piece) => inner.appendChild(pieceBlock(piece)));
   }
 
   panel.appendChild(inner);

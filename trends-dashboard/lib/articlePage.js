@@ -73,6 +73,61 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {}
   });
 }
 
+// fetchUrl decodes as utf8, which destroys binary. Photos need their bytes
+// intact to be handed to a vision model.
+function fetchBinary(target, { redirectsLeft = 5, maxBytes = 5_000_000 } = {}) {
+  return new Promise((resolve, reject) => {
+    let url;
+    try {
+      url = new URL(target);
+    } catch {
+      return reject(new Error(`URL invalide : ${target}`));
+    }
+
+    const req = https.request(
+      {
+        host: url.hostname,
+        path: url.pathname + url.search,
+        method: 'GET',
+        headers: { 'User-Agent': USER_AGENT, Accept: 'image/*,*/*;q=0.8' },
+      },
+      (res) => {
+        if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+          res.resume();
+          if (redirectsLeft <= 0) return reject(new Error('Trop de redirections'));
+          const next = new URL(res.headers.location, url).toString();
+          return resolve(fetchBinary(next, { redirectsLeft: redirectsLeft - 1, maxBytes }));
+        }
+
+        const chunks = [];
+        let size = 0;
+        let aborted = false;
+        res.on('data', (chunk) => {
+          size += chunk.length;
+          if (size > maxBytes) {
+            aborted = true;
+            res.destroy();
+            return;
+          }
+          chunks.push(chunk);
+        });
+        res.on('close', () =>
+          resolve({
+            statusCode: res.statusCode,
+            buffer: aborted ? null : Buffer.concat(chunks),
+            contentType: res.headers['content-type'] || '',
+            tooLarge: aborted,
+          })
+        );
+      }
+    );
+
+    req.setTimeout(REQUEST_TIMEOUT_MS, () => req.destroy(new Error('Délai dépassé')));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 // Accents and typographic punctuation are what publishers actually emit in
 // captions and summaries, so the table has to cover more than the five XML
 // entities. Anything unrecognised is left as written rather than mangled.
@@ -208,4 +263,11 @@ async function enrichArticle(article) {
   return enriched;
 }
 
-module.exports = { enrichArticle, fetchUrl, isDeadLink, decodeEntities, takeBrowserError };
+module.exports = {
+  enrichArticle,
+  fetchUrl,
+  fetchBinary,
+  isDeadLink,
+  decodeEntities,
+  takeBrowserError,
+};

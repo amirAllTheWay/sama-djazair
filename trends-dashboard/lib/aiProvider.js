@@ -15,7 +15,7 @@ const PROVIDERS = [
   },
   {
     id: 'groq',
-    label: () => `Groq (${groq.modelName()})`,
+    label: (withPhoto) => `Groq (${groq.modelName(withPhoto)})`,
     isConfigured: groq.isConfigured,
     complete: groq.complete,
   },
@@ -28,15 +28,15 @@ const isConfigured = () => configured().length > 0;
 // Falls through to the next provider on failure, so a Gemini quota wall is
 // survivable when a Groq key is present. The last error is the one reported,
 // with every attempt named so the panel does not just say "it failed".
-async function complete(prompt) {
+async function complete(prompt, { photo = null } = {}) {
   const available = configured();
   if (!available.length) throw new Error('Aucun fournisseur IA configuré.');
 
   const failures = [];
   for (const provider of available) {
     try {
-      const text = await provider.complete(prompt);
-      return { text, provider: provider.label() };
+      const text = await provider.complete(prompt, { photo });
+      return { text, provider: provider.label(Boolean(photo)) };
     } catch (err) {
       failures.push(`${provider.id} — ${err.message || String(err)}`);
     }
