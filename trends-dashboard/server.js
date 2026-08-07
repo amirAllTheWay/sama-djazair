@@ -5,6 +5,7 @@ const { runFetchCycle } = require('./lib/runFetchCycle');
 const { readLatest, loadStars } = require('./lib/store');
 const { generateDraft } = require('./lib/generateDraft');
 const { identifyPiece } = require('./lib/identifyPiece');
+const { fetchBinary } = require('./lib/articlePage');
 
 const PORT = process.env.PORT || 3000;
 const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MS || 30_000);
@@ -29,6 +30,41 @@ app.get('/api/articles', (req, res) => {
 
 app.get('/api/stars', (req, res) => {
   res.json(loadStars());
+});
+
+// Publisher CDNs commonly refuse an <img> loaded from another site — no
+// Referer of theirs, no image. Serving the bytes from here removes the
+// cross-origin question entirely: the server fetches them exactly as the
+// identification step already does.
+//
+// Restricted to URLs that appear in the stored collection, so this cannot be
+// used as an open proxy to fetch arbitrary hosts.
+function isKnownImage(url) {
+  const stars = readLatest().stars || {};
+  for (const entry of Object.values(stars)) {
+    for (const article of entry.articles || []) {
+      if (article.image === url) return true;
+      if (article.looks?.some((look) => look.image === url)) return true;
+    }
+  }
+  return false;
+}
+
+app.get('/api/image', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send('url requis');
+  if (!isKnownImage(url)) return res.status(403).send('image hors collecte');
+
+  try {
+    const { statusCode, buffer, contentType } = await fetchBinary(url, { maxBytes: 8_000_000 });
+    if (statusCode !== 200 || !buffer) return res.status(502).send(`éditeur : HTTP ${statusCode}`);
+
+    res.set('Content-Type', contentType || 'image/jpeg');
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err) {
+    res.status(502).send(err.message || String(err));
+  }
 });
 
 app.use(express.json({ limit: '256kb' }));

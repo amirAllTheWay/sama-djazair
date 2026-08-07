@@ -253,6 +253,17 @@ HTML complet (`fetchHtmlInBrowser`).
 Sous chaque photo, en petit : la marque et la pièce lues dans la légende, via
 le même vocabulaire mode que les cartes. À défaut, la légende elle-même.
 
+**Les images passent par le serveur** (`GET /api/image?url=…`). Les CDN des
+éditeurs refusent couramment une balise `<img>` chargée depuis un autre site :
+pas de Referer à eux, pas d'image — et le cadre restait vide. Le serveur va
+chercher les octets exactement comme le fait déjà l'identification. L'accès
+est restreint aux URL présentes dans la dernière collecte, pour que ce ne soit
+pas un proxy ouvert vers n'importe quel hôte.
+
+Un clic sur une vignette **agrandit la photo** dans une popin, avec sa légende.
+Il n'ouvre pas l'article : c'est le rôle du titre et de la photo de couverture.
+Échap ou un clic à côté referme.
+
 Cette lecture n'est faite que pour les cinq articles affichés — cinq requêtes
 par collecte, pas une par candidat.
 

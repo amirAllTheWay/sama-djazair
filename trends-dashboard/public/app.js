@@ -57,7 +57,7 @@ function articleCard(article) {
     figure.target = '_blank';
     figure.rel = 'noopener';
     const img = document.createElement('img');
-    img.src = article.image;
+    img.src = proxied(article.image);
     img.alt = '';
     img.loading = 'lazy';
     // A dead publisher image would otherwise leave a broken-icon gap.
@@ -125,6 +125,57 @@ function articleCard(article) {
   return card;
 }
 
+// Publisher CDNs refuse an <img> served from another origin; the server
+// fetches the bytes instead.
+function proxied(url) {
+  return `/api/image?url=${encodeURIComponent(url)}`;
+}
+
+// The photo on its own, big. Clicking a look should show the look, not send
+// the reader off to the article.
+function openPhotoPanel(look) {
+  document.getElementById('draft-panel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'draft-panel';
+  panel.className = 'draft-panel photo-panel';
+
+  const inner = document.createElement('div');
+  inner.className = 'photo-inner';
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'draft-close photo-close';
+  close.setAttribute('aria-label', 'Fermer');
+  close.textContent = '×';
+  close.addEventListener('click', () => panel.remove());
+  inner.appendChild(close);
+
+  const img = document.createElement('img');
+  img.className = 'photo-full';
+  img.src = proxied(look.image);
+  img.alt = look.caption || '';
+  inner.appendChild(img);
+
+  if (look.caption) {
+    const caption = document.createElement('p');
+    caption.className = 'photo-caption';
+    caption.textContent = look.caption;
+    inner.appendChild(caption);
+  }
+
+  panel.appendChild(inner);
+  panel.addEventListener('click', (event) => {
+    if (event.target === panel) panel.remove();
+  });
+  document.addEventListener('keydown', function onEscape(event) {
+    if (event.key !== 'Escape') return;
+    panel.remove();
+    document.removeEventListener('keydown', onEscape);
+  });
+  document.body.appendChild(panel);
+}
+
 // The photos found inside the article, laid out as a horizontal strip. Each
 // one carries the piece named in its caption and a button that asks the model
 // to pin down the exact garment.
@@ -145,17 +196,24 @@ function lookStrip(article, slug) {
     const item = document.createElement('div');
     item.className = 'look-item';
 
-    const frame = document.createElement('a');
+    // A button, not a link: clicking a look opens the photo full size rather
+    // than navigating to the article, which the title already does.
+    const frame = document.createElement('button');
+    frame.type = 'button';
     frame.className = 'look-photo';
-    frame.href = article.url;
-    frame.target = '_blank';
-    frame.rel = 'noopener';
+    frame.setAttribute('aria-label', 'Agrandir la photo');
     const img = document.createElement('img');
-    img.src = look.image;
+    img.src = proxied(look.image);
     img.alt = look.caption || '';
     img.loading = 'lazy';
-    // A photo the publisher blocks hot-linking on would leave a broken frame.
-    img.addEventListener('error', () => item.remove());
+    // Never silently blank: a frame that stays empty with no explanation is
+    // what made the last failure impossible to diagnose.
+    img.addEventListener('error', () => {
+      frame.classList.add('look-photo-failed');
+      frame.textContent = 'photo indisponible';
+      frame.disabled = true;
+    });
+    frame.addEventListener('click', () => openPhotoPanel(look));
     frame.appendChild(img);
     item.appendChild(frame);
 
@@ -297,7 +355,7 @@ function openLookPanel(payload, look) {
   } else {
     const preview = document.createElement('img');
     preview.className = 'look-preview';
-    preview.src = look.image;
+    preview.src = proxied(look.image);
     preview.alt = '';
     inner.appendChild(preview);
 

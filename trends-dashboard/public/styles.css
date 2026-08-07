@@ -445,3 +445,64 @@ a.article-image:focus-visible { outline: 2px solid var(--accent); outline-offset
   color: var(--muted);
   font-style: italic;
 }
+
+/* La photo devient un bouton : le clic l'agrandit, il ne quitte plus la page. */
+button.look-photo {
+  padding: 0;
+  cursor: zoom-in;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--muted);
+  display: block;
+}
+.look-photo-failed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: default;
+  background: var(--surface);
+  border-style: dashed;
+}
+
+.photo-panel { padding: 2rem; }
+.photo-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  align-items: center;
+  max-width: min(720px, 100%);
+  max-height: 92vh;
+}
+.photo-full {
+  max-width: 100%;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.photo-caption {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--surface);
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  max-width: 60ch;
+}
+.photo-close {
+  position: absolute;
+  top: -1.6rem;
+  right: -0.4rem;
+  color: var(--surface);
+  font-size: 2rem;
+  z-index: 1;
+}
+.photo-close:hover { color: var(--surface); opacity: 0.75; }
+
+/* Les vignettes ne doivent jamais être comprimées : la bande étire ses items
+   à la même hauteur, et un bouton flex rétrécit par défaut, ce qui écrasait
+   les photos dont le libellé tenait sur moins de lignes. */
+.look-strip { align-items: flex-start; }
+.look-photo { flex: none; box-sizing: border-box; }
