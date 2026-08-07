@@ -340,6 +340,21 @@ modalités d'entrée et le prix de chaque modèle, donc un modèle multimodal
 gratuit y est choisi *en lisant l'API* plutôt qu'en devinant un nom — ce qui
 avait déjà cassé une fois, un identifiant écrit à l'avance ayant été retiré.
 
+Trois candidats sont retenus, pas un : un modèle gratuit peut être
+momentanément indisponible, ou refuser une requête que sa fiche dit accepter.
+Le premier qui répond est mémorisé pour les appels suivants. Une clé refusée
+interrompt en revanche la boucle aussitôt — elle échouerait à l'identique
+partout.
+
+Deux détails qui ont chacun coûté un aller-retour à comprendre :
+
+- **`response_format` n'est pas accepté par tous les modèles**, et ceux qui le
+  refusent rejettent la requête entière. Il est tenté d'abord, puis abandonné
+  sur un `400` : mieux vaut du JSON à extraire d'une réponse que pas de réponse.
+- **« Provider returned error » est l'emballage d'OpenRouter**, pas la cause.
+  Ce qu'a dit le fournisseur en amont se trouve dans `error.metadata`, et c'est
+  cela qui est affiché.
+
 `npm run check-ai` interroge chaque fournisseur configuré, dit lequel peut lire
 une photo, et affiche la réponse complète en cas d'échec.
 

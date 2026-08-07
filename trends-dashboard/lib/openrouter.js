@@ -68,30 +68,51 @@ const isFree = (model) =>
 
 // Free models first, since nothing here should require a card; among those,
 // the largest context wins as a rough proxy for capability.
-function pickVisionModel(models) {
+function visionCandidates(models) {
   const capable = models.filter(takesImages);
-  if (!capable.length) return null;
-
-  const free = capable.filter(isFree);
-  const pool = free.length ? free : capable;
-  return pool.sort((a, b) => (b.context_length || 0) - (a.context_length || 0))[0].id;
+  const byContext = (a, b) => (b.context_length || 0) - (a.context_length || 0);
+  const free = capable.filter(isFree).sort(byContext);
+  const paid = capable.filter((model) => !isFree(model)).sort(byContext);
+  return [...free, ...paid].map((model) => model.id);
 }
 
-async function visionModel(apiKey) {
-  if (process.env.OPENROUTER_MODEL) return process.env.OPENROUTER_MODEL;
-  if (resolvedVisionModel) return resolvedVisionModel;
+const pickVisionModel = (models) => visionCandidates(models)[0] || null;
 
-  const chosen = pickVisionModel(await listModels(apiKey));
-  if (!chosen) throw new Error("OpenRouter ne propose aucun modèle acceptant les images.");
-  resolvedVisionModel = chosen;
-  return chosen;
+// Several are kept, not one: a free model can be temporarily unavailable or
+// reject a request its catalogue entry says it accepts, and one bad pick
+// should not take the whole feature down with it.
+const MODELS_TO_TRY = 3;
+
+async function candidatesFor(apiKey) {
+  if (process.env.OPENROUTER_MODEL) return [process.env.OPENROUTER_MODEL];
+  if (resolvedVisionModel) return [resolvedVisionModel];
+
+  const candidates = visionCandidates(await listModels(apiKey));
+  if (!candidates.length) throw new Error("OpenRouter ne propose aucun modèle acceptant les images.");
+  return candidates.slice(0, MODELS_TO_TRY);
+}
+
+const send = (apiKey, payload) =>
+  request({ path: '/api/v1/chat/completions', method: 'POST', apiKey, payload });
+
+// "Provider returned error" is OpenRouter's own wrapper; what the upstream
+// provider actually said sits in error.metadata, and that is the part worth
+// reading.
+function describeError(parsed, body) {
+  const error = parsed?.error;
+  if (!error) return body.slice(0, 220) || '(corps vide)';
+
+  const meta = error.metadata || {};
+  const raw = typeof meta.raw === 'string' ? meta.raw : meta.raw ? JSON.stringify(meta.raw) : null;
+  const provider = meta.provider_name ? `${meta.provider_name} : ` : '';
+
+  return `${provider}${raw || error.message || '(sans détail)'}`.slice(0, 260);
 }
 
 async function complete(prompt, { photo = null, json = false } = {}) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY n'est pas renseigné.");
 
-  const model = await visionModel(apiKey);
   const content = photo
     ? [
         { type: 'text', text: prompt },
@@ -99,17 +120,41 @@ async function complete(prompt, { photo = null, json = false } = {}) {
       ]
     : prompt;
 
-  const payload = { model, messages: [{ role: 'user', content }] };
-  // Asking in the prompt is not enough for small free models; the API-level
-  // constraint is what actually keeps prose out of the answer.
-  if (json) payload.response_format = { type: 'json_object' };
+  const candidates = await candidatesFor(apiKey);
+  const failures = [];
 
-  const { statusCode, body } = await request({
-    path: '/api/v1/chat/completions',
-    method: 'POST',
-    apiKey,
-    payload,
-  });
+  for (const model of candidates) {
+    try {
+      const text = await tryModel({ apiKey, model, content, json });
+      // Remember what worked so the next click goes straight there.
+      resolvedVisionModel = model;
+      return text;
+    } catch (err) {
+      // A rejected key is not the model's fault and will fail identically on
+      // every candidate — stop rather than burn the list.
+      if (err.fatal) throw err;
+      // tryModel already names the model in its message.
+      failures.push(err.message);
+    }
+  }
+
+  throw new Error(failures.join(' | '));
+}
+
+async function tryModel({ apiKey, model, content, json }) {
+  const base = { model, messages: [{ role: 'user', content }] };
+
+  // Asking in the prompt is not enough for small free models, so the format is
+  // constrained at the API level — but not every model behind OpenRouter
+  // accepts response_format, and those reject the whole request. It is tried
+  // first and dropped on a 400, which beats losing the call entirely.
+  let { statusCode, body } = await send(apiKey, json ? { ...base, response_format: { type: 'json_object' } } : base);
+  let droppedJsonMode = false;
+
+  if (statusCode === 400 && json) {
+    droppedJsonMode = true;
+    ({ statusCode, body } = await send(apiKey, base));
+  }
 
   let parsed = null;
   try {
@@ -118,18 +163,33 @@ async function complete(prompt, { photo = null, json = false } = {}) {
     /* handled below */
   }
 
-  if (statusCode === 401) throw new Error('Clé OpenRouter refusée — vérifie OPENROUTER_API_KEY.');
+  if (statusCode === 401) {
+    const err = new Error('Clé OpenRouter refusée — vérifie OPENROUTER_API_KEY.');
+    err.fatal = true;
+    throw err;
+  }
   if (statusCode === 402) {
     throw new Error(`Crédits insuffisants pour ${model} — choisis un modèle « :free » via OPENROUTER_MODEL.`);
   }
   if (statusCode === 429) throw new Error(`Limite atteinte sur ${model} — réessaie dans un instant.`);
   if (statusCode >= 400) {
-    throw new Error(`OpenRouter a répondu HTTP ${statusCode} : ${parsed?.error?.message || body.slice(0, 200)}`);
+    throw new Error(
+      `${model} a échoué (HTTP ${statusCode}) : ${describeError(parsed, body)}` +
+        (droppedJsonMode ? ' — même sans contrainte JSON' : '')
+    );
   }
 
   const text = parsed?.choices?.[0]?.message?.content;
-  if (!text) throw new Error('OpenRouter a renvoyé une réponse vide.');
+  if (!text) throw new Error(`${model} a renvoyé une réponse vide.`);
   return text;
 }
 
-module.exports = { complete, isConfigured, modelName, listModels, pickVisionModel, takesImages };
+module.exports = {
+  complete,
+  isConfigured,
+  modelName,
+  listModels,
+  pickVisionModel,
+  visionCandidates,
+  takesImages,
+};
