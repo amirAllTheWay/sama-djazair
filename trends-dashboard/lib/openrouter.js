@@ -58,9 +58,28 @@ async function listModels(apiKey = process.env.OPENROUTER_API_KEY) {
   return JSON.parse(body).data || [];
 }
 
-const takesImages = (model) =>
-  (model.architecture?.input_modalities || []).includes('image') ||
-  /vision|vl\b|multimodal/i.test(model.architecture?.modality || '');
+// Families that are not chat models at all: image, video, music and speech
+// generators, embeddings, moderation. Several of them declare an image input —
+// Lyria takes one to condition a piece of music — and would otherwise look
+// like perfectly good candidates right up to the 400.
+const NOT_CHAT =
+  /(lyria|imagen|dall-?e|stable-?diffusion|flux|midjourney|veo|sora|runway|music|audio|tts|whisper|speech|voice|embed|moderation|rerank|guard)/i;
+
+// Two conditions, not one: the model has to accept an image *and* answer in
+// text. Checking only the input is what selected a music generator.
+function takesImages(model) {
+  if (NOT_CHAT.test(model.id || '')) return false;
+
+  const input = model.architecture?.input_modalities || [];
+  const output = model.architecture?.output_modalities || [];
+
+  const readsImages =
+    input.includes('image') || /vision|vl\b|multimodal/i.test(model.architecture?.modality || '');
+  // An unspecified output is assumed to be text, which is the norm for chat.
+  const writesText = output.length === 0 || output.includes('text');
+
+  return readsImages && writesText;
+}
 
 const isFree = (model) =>
   model.id?.endsWith(':free') ||

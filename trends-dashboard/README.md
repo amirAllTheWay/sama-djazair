@@ -346,6 +346,12 @@ Le premier qui répond est mémorisé pour les appels suivants. Une clé refusé
 interrompt en revanche la boucle aussitôt — elle échouerait à l'identique
 partout.
 
+Un modèle candidat doit **lire une image et répondre en texte** — les deux.
+Ne vérifier que l'entrée avait fait choisir `lyria`, un générateur de musique
+qui accepte une image pour en conditionner un morceau. Les familles qui ne
+sont pas des modèles de conversation (génération d'images ou de vidéo, TTS,
+transcription, embeddings, modération) sont écartées par leur nom en plus.
+
 Deux détails qui ont chacun coûté un aller-retour à comprendre :
 
 - **`response_format` n'est pas accepté par tous les modèles**, et ceux qui le

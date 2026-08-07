@@ -30,6 +30,14 @@ const isConfigured = () => Boolean(process.env.GROQ_API_KEY);
 // Resolved from the catalogue on first use, so the 404 is paid once at most.
 let resolvedVisionModel = null;
 
+// Whether this account has any multimodal model is a property of the account,
+// not of the request. Once the catalogue has said no, re-asking on every click
+// costs two round trips to reach the same conclusion.
+let hasNoVisionModel = false;
+const VISION_UNAVAILABLE =
+  'ce compte Groq ne propose aucun modèle capable de lire une image. ' +
+  'Ajoute OPENROUTER_API_KEY — clé gratuite sur openrouter.ai/keys.';
+
 // The resolved name comes first: it is only ever set after the configured one
 // returned a 404, so preferring it stops a stale .env value from costing a
 // failed round trip on every single call.
@@ -131,6 +139,10 @@ async function complete(prompt, { photo = null, json = false } = {}) {
   if (!apiKey) throw new Error("GROQ_API_KEY n'est pas renseigné.");
 
   const wantsVision = Boolean(photo);
+  // Already established that this account has none: fail immediately so the
+  // next provider gets its turn without two wasted calls.
+  if (wantsVision && hasNoVisionModel) throw new Error(VISION_UNAVAILABLE);
+
   let model = modelName(wantsVision);
   let { statusCode, body, parsed } = await attempt(prompt, apiKey, model, photo, json);
 
@@ -149,11 +161,8 @@ async function complete(prompt, { photo = null, json = false } = {}) {
       // Which models a Groq account is offered is not something the user can
       // change from here, so point at the provider that does have them rather
       // than at a variable there is nothing valid to put in.
-      throw new Error(
-        "ce compte Groq ne propose aucun modèle capable de lire une image " +
-          `(${catalogue.length} modèles, tous texte, audio ou sécurité). ` +
-          'Ajoute OPENROUTER_API_KEY — clé gratuite sur openrouter.ai/keys.'
-      );
+      if (wantsVision) hasNoVisionModel = true;
+      throw new Error(`${VISION_UNAVAILABLE} (${catalogue.length} modèles au catalogue, aucun multimodal)`);
     }
 
     if (wantsVision) resolvedVisionModel = replacement;
