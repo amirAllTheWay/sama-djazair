@@ -144,4 +144,4 @@ async function generateDraft(article) {
   }
 }
 
-module.exports = { generateDraft, templateDraft, buildPrompt };
+module.exports = { generateDraft, templateDraft, buildPrompt, callGemini };

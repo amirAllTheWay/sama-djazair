@@ -73,13 +73,35 @@ function fetchUrl(target, { redirectsLeft = 5, maxBytes = Infinity, headers = {}
   });
 }
 
+// Accents and typographic punctuation are what publishers actually emit in
+// captions and summaries, so the table has to cover more than the five XML
+// entities. Anything unrecognised is left as written rather than mangled.
+const NAMED_ENTITIES = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  // Ponctuation typographique
+  rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', hellip: '…',
+  ndash: '–', mdash: '—', laquo: '«', raquo: '»', middot: '·',
+  bull: '•', deg: '°', euro: '€', pound: '£', trade: '™',
+  copy: '©', reg: '®', times: '×', frac12: '½', prime: '′',
+  // Lettres accentuées
+  eacute: 'é', egrave: 'è', ecirc: 'ê', euml: 'ë',
+  agrave: 'à', acirc: 'â', auml: 'ä', aring: 'å', aelig: 'æ',
+  ugrave: 'ù', ucirc: 'û', uuml: 'ü',
+  icirc: 'î', iuml: 'ï', ocirc: 'ô', ouml: 'ö', oslash: 'ø', oelig: 'œ',
+  ccedil: 'ç', ntilde: 'ñ', szlig: 'ß',
+  Eacute: 'É', Egrave: 'È', Ecirc: 'Ê', Agrave: 'À', Acirc: 'Â',
+  Ccedil: 'Ç', Ouml: 'Ö', Uuml: 'Ü', Auml: 'Ä',
+};
+
 function decodeEntities(text) {
   if (!text) return '';
-  const named = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
   return text
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
-    .replace(/&([a-z]+|#\d+);/gi, (whole, name) => named[name.toLowerCase()] ?? whole);
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&([a-z][a-z0-9]*);/gi, (whole, name) => {
+      // Case matters for the accented ones: &Eacute; is not &eacute;.
+      return NAMED_ENTITIES[name] ?? NAMED_ENTITIES[name.toLowerCase()] ?? whole;
+    });
 }
 
 function metaContent(html, patterns) {

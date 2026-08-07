@@ -1,4 +1,5 @@
 const { enrichArticle } = require('./articlePage');
+const { looksFor } = require('./articleLooks');
 const { parseRelativeDate } = require('./googleSearch');
 const { activeSource, describeSetup } = require('./searchSource');
 const { isExcluded, isKnownPress } = require('./publishers');
@@ -197,8 +198,15 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   for (const article of articles) article.score = relevanceScore(article);
   articles.sort((a, b) => b.score - a.score);
 
+  // Only the articles that made the board get their photo strip read.
+  const shown = articles.slice(0, MAX_ARTICLES);
+  const strips = await mapWithConcurrency(shown, ENRICH_CONCURRENCY, looksFor);
+  shown.forEach((article, index) => {
+    article.looks = strips[index];
+  });
+
   return {
-    articles: articles.slice(0, MAX_ARTICLES),
+    articles: shown,
     errors,
     excluded,
     dead,

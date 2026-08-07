@@ -224,6 +224,45 @@ npx playwright install chromium
 Le navigateur reste utile même avec l'API : il sert à lire les pages des
 éditeurs qui refusent les requêtes ordinaires par un `403`.
 
+## La bande de photos
+
+Sous chaque carte, les photos trouvées **dans** l'article, en bande
+horizontale. L'`og:image` de la carte n'est que la photo d'ouverture ; un
+article sur le style de quelqu'un en contient plusieurs, et c'est la légende
+qui nomme la marque.
+
+`lib/articleLooks.js` lit la page à la recherche des `<figure>` — ce sont
+elles qui portent une légende — puis des `<img>` restants pour les éditeurs
+qui n'en utilisent pas. Sont écartés les logos, portraits d'auteur, icônes de
+partage, bannières et pixels de suivi, ainsi que tout ce qui mesure moins de
+200 px. Le `srcset` est résolu vers la plus grande version, et le `data-src`
+des images en chargement différé est suivi.
+
+Sous chaque photo, en petit : la marque et la pièce lues dans la légende, via
+le même vocabulaire mode que les cartes. À défaut, la légende elle-même.
+
+Cette lecture n'est faite que pour les cinq articles affichés — cinq requêtes
+par collecte, pas une par candidat.
+
+### Retrouver la pièce
+
+Le bouton sous chaque photo interroge le modèle sur cette photo précise. Le
+prompt lui donne le titre, le résumé, la légende et les marques déjà repérées,
+et lui demande un JSON : la pièce, la maison, le modèle, un indice de
+confiance, et une alternative nettement moins chère en enseigne accessible.
+
+Il lui est explicitement interdit d'inventer une marque absente de l'article —
+c'est `null` et une confiance « faible » plutôt qu'une réponse plausible et
+fausse, puisque le modèle ne voit jamais l'image, seulement le texte.
+
+Les deux pièces — l'originale et l'alternative — reçoivent chacune un lien
+d'affiliation via `lib/affiliate.js`.
+
+Sans `GEMINI_API_KEY`, le bouton fonctionne quand même : la marque et la pièce
+sont lues dans la légende, sans IA, et c'est indiqué dans le panneau. Les
+requêtes d'achat partent alors en anglais (`garmentTerms`) et non avec le
+libellé français affiché, puisque les marchands visés sont américains.
+
 ## Créer un article depuis une carte
 
 Chaque carte porte un bouton **Créer un article**. Il produit un brouillon

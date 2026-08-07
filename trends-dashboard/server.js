@@ -4,6 +4,7 @@ const express = require('express');
 const { runFetchCycle } = require('./lib/runFetchCycle');
 const { readLatest, loadStars } = require('./lib/store');
 const { generateDraft } = require('./lib/generateDraft');
+const { identifyPiece } = require('./lib/identifyPiece');
 
 const PORT = process.env.PORT || 3000;
 const REFRESH_COOLDOWN_MS = Number(process.env.REFRESH_COOLDOWN_MS || 30_000);
@@ -48,6 +49,33 @@ app.post('/api/draft', async (req, res) => {
 
   try {
     res.json({ ok: true, article: { title: article.title, url: article.url }, ...(await generateDraft(article)) });
+  } catch (err) {
+    res.status(500).json({ ok: false, message: err.message || String(err) });
+  }
+});
+
+// Identifies the garment in one photo of one article. Like /api/draft, both
+// the article and the photo are resolved server-side from the stored
+// collection, so the model can only ever be pointed at coverage the board
+// actually found.
+app.post('/api/identify', async (req, res) => {
+  const { slug, url, image } = req.body || {};
+  if (!slug || !url || !image) {
+    return res.status(400).json({ ok: false, message: 'slug, url et image sont requis.' });
+  }
+
+  const article = readLatest().stars?.[slug]?.articles?.find((item) => item.url === url);
+  if (!article) {
+    return res.status(404).json({ ok: false, message: 'Article introuvable dans la dernière collecte.' });
+  }
+
+  const look = article.looks?.find((entry) => entry.image === image);
+  if (!look) {
+    return res.status(404).json({ ok: false, message: 'Photo introuvable dans cet article.' });
+  }
+
+  try {
+    res.json({ ok: true, ...(await identifyPiece({ article, look })) });
   } catch (err) {
     res.status(500).json({ ok: false, message: err.message || String(err) });
   }

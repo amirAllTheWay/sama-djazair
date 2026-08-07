@@ -197,15 +197,30 @@ function matchLabels(text, dictionary) {
   return hits.map(({ label }) => label).filter((label) => !absorbed.has(label));
 }
 
+// The English term that actually matched, rather than the French label shown
+// on the card. Shopping searches run against US merchants, where "leather
+// jacket" converts and "Blouson en cuir" returns nothing.
+function matchedTerms(text, dictionary) {
+  const haystack = normalize(text);
+  const terms = [];
+  for (const { match } of dictionary) {
+    const hit = match.find((term) => haystack.includes(normalize(term)));
+    if (hit) terms.push(hit);
+  }
+  return terms;
+}
+
 const detectBrands = (text) => matchLabels(text, BRANDS);
 const detectOccasions = (text) => matchLabels(text, OCCASIONS);
 const detectGarments = (text) => matchLabels(text, GARMENTS);
+const garmentTerms = (text) => matchedTerms(text, GARMENTS);
 
 module.exports = {
   isFashionQuery,
   detectBrands,
   detectOccasions,
   detectGarments,
+  garmentTerms,
   FASHION_TERMS,
   BRANDS,
   OCCASIONS,

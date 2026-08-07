@@ -43,16 +43,19 @@ function echoesTitle(summary, title) {
   return cleanSummary.startsWith(cleanTitle) || cleanTitle.startsWith(cleanSummary);
 }
 
+// The card holds buttons now, so it cannot be an <a>: a click anywhere inside
+// one would navigate away instead of firing the button. The image and the
+// title carry the link instead.
 function articleCard(article) {
-  const card = document.createElement('a');
+  const card = document.createElement('div');
   card.className = 'article-card';
-  card.href = article.url;
-  card.target = '_blank';
-  card.rel = 'noopener';
 
   if (article.image) {
-    const figure = document.createElement('div');
+    const figure = document.createElement('a');
     figure.className = 'article-image';
+    figure.href = article.url;
+    figure.target = '_blank';
+    figure.rel = 'noopener';
     const img = document.createElement('img');
     img.src = article.image;
     img.alt = '';
@@ -85,8 +88,11 @@ function articleCard(article) {
   }
   content.appendChild(meta);
 
-  const title = document.createElement('p');
+  const title = document.createElement('a');
   title.className = 'article-title';
+  title.href = article.url;
+  title.target = '_blank';
+  title.rel = 'noopener';
   title.textContent = article.title;
   content.appendChild(title);
 
@@ -119,10 +125,185 @@ function articleCard(article) {
   return card;
 }
 
+// The photos found inside the article, laid out as a horizontal strip. Each
+// one carries the piece named in its caption and a button that asks the model
+// to pin down the exact garment.
+function lookStrip(article, slug) {
+  if (!article.looks?.length) return null;
+
+  const strip = document.createElement('div');
+  strip.className = 'look-strip';
+
+  article.looks.forEach((look) => {
+    const item = document.createElement('div');
+    item.className = 'look-item';
+
+    const frame = document.createElement('a');
+    frame.className = 'look-photo';
+    frame.href = article.url;
+    frame.target = '_blank';
+    frame.rel = 'noopener';
+    const img = document.createElement('img');
+    img.src = look.image;
+    img.alt = look.caption || '';
+    img.loading = 'lazy';
+    // A photo the publisher blocks hot-linking on would leave a broken frame.
+    img.addEventListener('error', () => item.remove());
+    frame.appendChild(img);
+    item.appendChild(frame);
+
+    const label = document.createElement('p');
+    label.className = 'look-label';
+    label.textContent = look.label || 'Pièce non nommée';
+    if (look.caption) label.title = look.caption;
+    item.appendChild(label);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'identify-btn';
+    btn.textContent = 'Retrouver la pièce';
+    btn.addEventListener('click', () => requestIdentify(slug, article, look, btn));
+    item.appendChild(btn);
+
+    strip.appendChild(item);
+  });
+
+  return strip;
+}
+
+async function requestIdentify(slug, article, look, button) {
+  button.disabled = true;
+  button.textContent = 'Recherche…';
+
+  try {
+    const res = await fetch('/api/identify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slug, url: article.url, image: look.image }),
+    });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.message || "Échec de l'identification.");
+    openLookPanel(body, look);
+  } catch (err) {
+    openLookPanel({ error: err.message }, look);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Retrouver la pièce';
+  }
+}
+
+function shopRow(heading, entry) {
+  const row = document.createElement('div');
+  row.className = 'shop-row';
+
+  const label = document.createElement('p');
+  label.className = 'shop-label';
+  label.textContent = heading;
+  row.appendChild(label);
+
+  const text = document.createElement('p');
+  text.className = 'shop-text';
+  text.textContent = entry.description || entry.query || '—';
+  row.appendChild(text);
+
+  const link = document.createElement('a');
+  link.className = 'shop-link';
+  link.href = entry.url;
+  link.target = '_blank';
+  link.rel = 'noopener';
+  link.textContent = entry.affiliate ? `Acheter (${entry.provider})` : 'Voir les offres';
+  row.appendChild(link);
+
+  if (!entry.affiliate) {
+    const note = document.createElement('span');
+    note.className = 'shop-note';
+    note.textContent = 'lien non affilié';
+    row.appendChild(note);
+  }
+
+  return row;
+}
+
+function openLookPanel(payload, look) {
+  document.getElementById('draft-panel')?.remove();
+
+  const panel = document.createElement('div');
+  panel.id = 'draft-panel';
+  panel.className = 'draft-panel';
+
+  const inner = document.createElement('div');
+  inner.className = 'draft-inner';
+
+  const head = document.createElement('div');
+  head.className = 'draft-head';
+  const heading = document.createElement('p');
+  heading.className = 'draft-title';
+  heading.textContent = payload.error ? 'Identification impossible' : 'La pièce sur la photo';
+  head.appendChild(heading);
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'draft-close';
+  close.setAttribute('aria-label', 'Fermer');
+  close.textContent = '×';
+  close.addEventListener('click', () => panel.remove());
+  head.appendChild(close);
+  inner.appendChild(head);
+
+  if (payload.error) {
+    const err = document.createElement('p');
+    err.className = 'error-box';
+    err.textContent = payload.error;
+    inner.appendChild(err);
+  } else {
+    const preview = document.createElement('img');
+    preview.className = 'look-preview';
+    preview.src = look.image;
+    preview.alt = '';
+    inner.appendChild(preview);
+
+    const name = document.createElement('p');
+    name.className = 'piece-name';
+    name.textContent = [payload.brand, payload.model, payload.piece].filter(Boolean).join(' · ');
+    inner.appendChild(name);
+
+    const meta = document.createElement('p');
+    meta.className = 'draft-meta';
+    meta.textContent = `Identifié par ${payload.identifiedBy} · confiance ${payload.confidence}`;
+    inner.appendChild(meta);
+
+    if (payload.reasoning) {
+      const why = document.createElement('p');
+      why.className = 'piece-why';
+      why.textContent = payload.reasoning;
+      inner.appendChild(why);
+    }
+
+    if (payload.warning) {
+      const warn = document.createElement('p');
+      warn.className = 'error-box';
+      warn.textContent = payload.warning;
+      inner.appendChild(warn);
+    }
+
+    inner.appendChild(shopRow("La pièce d'origine", payload.original));
+    inner.appendChild(shopRow('Une alternative moins chère', payload.alternative));
+  }
+
+  panel.appendChild(inner);
+  panel.addEventListener('click', (event) => {
+    if (event.target === panel) panel.remove();
+  });
+  document.body.appendChild(panel);
+}
+
 function articleEntry(article, slug) {
   const wrap = document.createElement('div');
   wrap.className = 'article-entry';
   wrap.appendChild(articleCard(article));
+
+  const strip = lookStrip(article, slug);
+  if (strip) wrap.appendChild(strip);
 
   const action = document.createElement('button');
   action.type = 'button';
