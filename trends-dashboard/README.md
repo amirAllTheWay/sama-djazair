@@ -266,8 +266,12 @@ surprenante.
 
 `lib/photoInput.js` charge l'image en binaire (jusqu'à 4 Mo, formats courants)
 et la transmet en base64 : `inline_data` chez Gemini, `image_url` chez Groq.
-Groq bascule alors sur un modèle de vision (`GROQ_VISION_MODEL`), son modèle
-texte par défaut étant aveugle. Si la photo ne peut pas être chargée, le
+Groq bascule alors sur un modèle de vision, son modèle texte par défaut étant
+aveugle. Ce nom-là n'est pas codé en dur : Groq retire et renomme ses modèles,
+et un identifiant périmé échoue sur un `404` qui n'explique rien. Le catalogue
+est donc demandé à Groq et un modèle multimodal y est choisi, une seule fois
+par démarrage. `GROQ_VISION_MODEL` ne sert qu'à forcer un choix précis, et
+`npm run check-ai` affiche le catalogue complet. Si la photo ne peut pas être chargée, le
 modèle répond d'après le texte seul et le panneau le signale.
 
 Sans clé IA, le bouton fonctionne quand même : les pièces sont lues dans la

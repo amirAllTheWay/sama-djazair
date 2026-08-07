@@ -5,6 +5,7 @@
 //   npm run check-ai
 
 const { PROVIDERS, describeSetup } = require('../lib/aiProvider');
+const groq = require('../lib/groq');
 
 function mask(value) {
   if (!value) return '(vide)';
@@ -38,11 +39,25 @@ const KEYS = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY' };
     try {
       const text = await provider.complete('Réponds exactement : OK');
       const seconds = ((Date.now() - started) / 1000).toFixed(1);
-      console.log(`          ✓ répond en ${seconds}s — « ${text.trim().slice(0, 60)} »\n`);
+      console.log(`          ✓ répond en ${seconds}s — « ${text.trim().slice(0, 60)} »`);
       anyWorks = true;
     } catch (err) {
-      console.log(`          ✗ ${err.message}\n`);
+      console.log(`          ✗ ${err.message}`);
     }
+
+    // Model names change; printing the catalogue removes the guesswork about
+    // which one can actually look at a photo.
+    if (provider.id === 'groq') {
+      try {
+        const models = await groq.listModels();
+        const vision = groq.pickVisionModel(models);
+        console.log(`          modèle de vision retenu : ${vision || 'aucun trouvé'}`);
+        console.log(`          catalogue : ${models.join(', ')}`);
+      } catch (err) {
+        console.log(`          catalogue indisponible : ${err.message}`);
+      }
+    }
+    console.log('');
   }
 
   console.log(
