@@ -10,6 +10,7 @@ const { activeSource, describeSetup } = require('../lib/searchSource');
 const { enrichArticle, takeBrowserError } = require('../lib/articlePage');
 const { closeBrowser } = require('../lib/browserResolver');
 const { isFashionQuery } = require('../lib/fashionVocabulary');
+const { looksFor } = require('../lib/articleLooks');
 const { isExcluded, isKnownPress } = require('../lib/publishers');
 const { defaultArticleQueries } = require('../lib/fetchArticles');
 const { loadStars } = require('../lib/store');
@@ -118,6 +119,13 @@ function truncate(value, length = 66) {
       `   lien    : ${enriched.dead ? '✗ MORT (404) — retiré du dashboard' : '✓ ouvrable'}`
     );
     console.log(`   url     : ${enriched.url}`);
+    const strip = await looksFor({ ...enriched, url: enriched.url });
+    console.log(
+      `   bande   : ${strip.looks.length ? `${strip.looks.length} photo(s)` : `✗ vide — ${strip.reason}`}`
+    );
+    strip.looks.slice(0, 3).forEach((look) => {
+      console.log(`      · ${(look.label || 'sans libellé').slice(0, 52)}`);
+    });
     if (item.queries > 1) console.log(`   trouvé par ${item.queries} requêtes différentes`);
     console.log('');
   }

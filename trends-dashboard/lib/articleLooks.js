@@ -5,6 +5,7 @@
 // under the photo.
 
 const { decodeEntities, fetchUrl } = require('./articlePage');
+const { fetchHtmlInBrowser, isAvailable } = require('./browserResolver');
 const { detectBrands, detectGarments } = require('./fashionVocabulary');
 
 const MAX_LOOKS = 8;
@@ -15,8 +16,32 @@ const MAX_HTML_BYTES = 500_000;
 // a photograph of an outfit.
 const MIN_DIMENSION = 200;
 
-const JUNK_SRC =
-  /(logo|icon|sprite|avatar|placeholder|pixel|tracking|1x1|spacer|badge|button|banner|advert|promo|newsletter|byline|author|headshot|social|share|amp-|favicon)/i;
+// Matched against the file name, not the whole URL. A CDN path can carry any
+// of these words in a transform parameter or an encoded source URL — Substack
+// serves article photos through /image/fetch/… with the original URL appended
+// — and testing the entire string threw away real photos.
+const JUNK_FILENAME =
+  /(logo|sprite|avatar|placeholder|spacer|favicon|headshot|byline|1x1|pixel\b|blank|transparent|button|-icon|icon-)/i;
+
+// Vector assets are interface furniture — buttons, logos, arrows. Press
+// photography is never an SVG.
+const VECTOR = /\.svg(\?|$)/i;
+
+// A few paths are junk wherever they appear: these are widgets and trackers,
+// never article photography.
+const JUNK_PATH = /\/(ads?|advert|tracking|beacon|analytics|subscribe-widget|emoji)\//i;
+
+function junkLooking(rawUrl) {
+  let path = rawUrl;
+  try {
+    // Substack and friends percent-encode the original URL inside the CDN one.
+    path = decodeURIComponent(new URL(rawUrl, 'https://x.invalid').pathname);
+  } catch {
+    /* fall back to testing the raw string */
+  }
+  const filename = path.split('/').filter(Boolean).pop() || '';
+  return VECTOR.test(filename) || JUNK_FILENAME.test(filename) || JUNK_PATH.test(path);
+}
 
 function attr(tag, name) {
   const match =
@@ -105,7 +130,7 @@ function extractLooks(html, baseUrl, { max = MAX_LOOKS } = {}) {
 
     const raw = sourceFrom(imgTag);
     if (!raw || raw.startsWith('data:')) return;
-    if (JUNK_SRC.test(raw)) return;
+    if (junkLooking(raw)) return;
 
     const url = absolute(raw, baseUrl);
     if (!url || seen.has(url)) return;
@@ -136,17 +161,59 @@ function extractLooks(html, baseUrl, { max = MAX_LOOKS } = {}) {
 // Run only for the articles that made it onto the board, so the extra page
 // read costs five requests rather than one per candidate. A publisher that
 // refuses the request simply yields no strip; the card itself still stands.
+// Returns { looks, reason }. The reason matters: an empty strip had three
+// indistinguishable causes — the publisher refused the request, the page came
+// back empty, or the markup held no usable photo — and all three showed up as
+// a card with nothing under it and no way to tell which.
 async function looksFor(article) {
-  if (!article.url) return [];
+  if (!article.url) return { looks: [], reason: 'article sans URL' };
+
+  let html = null;
+  let baseUrl = article.url;
+  let plainFailure = null;
+
   try {
     const { statusCode, body, finalUrl } = await fetchUrl(article.url, {
       maxBytes: MAX_HTML_BYTES,
     });
-    if (statusCode !== 200 || !body) return [];
-    return extractLooks(body, finalUrl || article.url);
-  } catch {
-    return [];
+    if (statusCode === 200 && body) {
+      html = body;
+      baseUrl = finalUrl || article.url;
+    } else {
+      plainFailure = `HTTP ${statusCode}`;
+    }
+  } catch (err) {
+    plainFailure = err.message || String(err);
   }
+
+  // Publishers that block plain requests are exactly the ones whose photos are
+  // worth having, so the browser gets a turn before giving up.
+  if (!html && isAvailable()) {
+    try {
+      const page = await fetchHtmlInBrowser(article.url);
+      if (page?.html) {
+        html = page.html;
+        baseUrl = page.finalUrl || article.url;
+      }
+    } catch (err) {
+      return { looks: [], reason: `${plainFailure}, navigateur : ${err.message}` };
+    }
+  }
+
+  if (!html) {
+    return {
+      looks: [],
+      reason: isAvailable()
+        ? `page illisible (${plainFailure})`
+        : `page illisible (${plainFailure}) — Playwright absent, aucun repli navigateur`,
+    };
+  }
+
+  const looks = extractLooks(html, baseUrl);
+  return {
+    looks,
+    reason: looks.length ? null : 'page lue, mais aucune photo exploitable trouvée',
+  };
 }
 
 module.exports = { extractLooks, describeLook, looksFor, MAX_LOOKS };

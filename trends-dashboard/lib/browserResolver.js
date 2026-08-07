@@ -118,6 +118,17 @@ function metaFrom(html, keys) {
 // The profile is shared, so pages are opened and closed within it rather than
 // spinning up a fresh context each time, which would discard
 // the cookies that keep Google satisfied.
+// Full page HTML through a real browser, for publishers that answer 403 to a
+// plain request. resolveInBrowser returns only the metadata; extracting the
+// photo strip needs the markup itself.
+async function fetchHtmlInBrowser(url, { timeoutMs = 25_000 } = {}) {
+  return withPage(async (page) => {
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+    if (!response || !response.ok()) return null;
+    return { html: await page.content(), finalUrl: page.url() };
+  });
+}
+
 async function withPage(task) {
   const context = await getContext();
   if (!context) return null;
@@ -151,4 +162,11 @@ async function resolveInBrowser(url) {
   });
 }
 
-module.exports = { resolveInBrowser, withPage, closeBrowser, isAvailable, PROFILE_DIR };
+module.exports = {
+  resolveInBrowser,
+  fetchHtmlInBrowser,
+  withPage,
+  closeBrowser,
+  isAvailable,
+  PROFILE_DIR,
+};

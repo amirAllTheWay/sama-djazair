@@ -437,3 +437,11 @@ a.article-image:focus-visible { outline: 2px solid var(--accent); outline-offset
 }
 .confidence-élevée { background: var(--rising-tint); color: var(--rising); }
 .confidence-faible { background: var(--error-tint); color: var(--error); }
+
+.look-note {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  color: var(--muted);
+  font-style: italic;
+}

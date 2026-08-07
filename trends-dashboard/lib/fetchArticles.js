@@ -202,7 +202,10 @@ async function fetchStarArticles(star, { geo = DEFAULT_GEO, hl = DEFAULT_HL } = 
   const shown = articles.slice(0, MAX_ARTICLES);
   const strips = await mapWithConcurrency(shown, ENRICH_CONCURRENCY, looksFor);
   shown.forEach((article, index) => {
-    article.looks = strips[index];
+    article.looks = strips[index].looks;
+    // Kept on the article so an empty strip can say why, rather than simply
+    // not being there.
+    article.looksReason = strips[index].reason;
   });
 
   return {

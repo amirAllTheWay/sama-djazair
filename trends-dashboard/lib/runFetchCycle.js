@@ -55,8 +55,14 @@ async function runFetchCycle() {
     );
     for (const article of entry.articles) {
       const look = article.garments.length ? article.garments.join(' · ') : 'look non identifié';
-      console.log(`[articles]   ${article.image ? '📷' : '——'} ${article.source || '?'} — ${look}`);
+      const strip = article.looks?.length ? `${article.looks.length} photo(s)` : 'bande vide';
+      console.log(
+        `[articles]   ${article.image ? '📷' : '——'} ${article.source || '?'} — ${look} — ${strip}`
+      );
       if (!article.image) console.log(`[articles]      (pas de photo) ${article.url}`);
+      if (!article.looks?.length && article.looksReason) {
+        console.log(`[articles]      bande vide : ${article.looksReason}`);
+      }
     }
     const browserError = takeBrowserError();
     if (browserError) {

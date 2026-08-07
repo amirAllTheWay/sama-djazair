@@ -129,7 +129,14 @@ function articleCard(article) {
 // one carries the piece named in its caption and a button that asks the model
 // to pin down the exact garment.
 function lookStrip(article, slug) {
-  if (!article.looks?.length) return null;
+  // An absent strip used to be indistinguishable from a broken one. Say which.
+  if (!article.looks?.length) {
+    if (!article.looksReason) return null;
+    const note = document.createElement('p');
+    note.className = 'look-note';
+    note.textContent = `Photos non extraites — ${article.looksReason}`;
+    return note;
+  }
 
   const strip = document.createElement('div');
   strip.className = 'look-strip';

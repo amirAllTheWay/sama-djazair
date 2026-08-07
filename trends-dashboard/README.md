@@ -233,10 +233,22 @@ qui nomme la marque.
 
 `lib/articleLooks.js` lit la page à la recherche des `<figure>` — ce sont
 elles qui portent une légende — puis des `<img>` restants pour les éditeurs
-qui n'en utilisent pas. Sont écartés les logos, portraits d'auteur, icônes de
-partage, bannières et pixels de suivi, ainsi que tout ce qui mesure moins de
-200 px. Le `srcset` est résolu vers la plus grande version, et le `data-src`
-des images en chargement différé est suivi.
+qui n'en utilisent pas. Le `srcset` est résolu vers la plus grande version, et
+le `data-src` des images en chargement différé est suivi.
+
+Le tri des parasites porte sur le **nom de fichier**, pas sur l'URL entière :
+un CDN glisse volontiers ces mots-là dans ses paramètres de transformation ou
+dans l'URL d'origine qu'il encode à la suite — Substack sert ses photos via
+`/image/fetch/…` — et tester la chaîne complète écartait de vraies photos.
+S'y ajoutent les `.svg`, qui sont du mobilier d'interface et jamais de la
+photographie de presse, et tout ce qui mesure moins de 200 px.
+
+Si la lecture échoue, la raison est conservée sur l'article et affichée sous
+la carte. Trois causes très différentes — l'éditeur refuse la requête, la page
+revient vide, le balisage ne contient aucune photo exploitable — donnaient
+sinon le même résultat muet : une carte sans rien en dessous. Un éditeur qui
+bloque les requêtes ordinaires passe désormais par le navigateur, qui rend le
+HTML complet (`fetchHtmlInBrowser`).
 
 Sous chaque photo, en petit : la marque et la pièce lues dans la légende, via
 le même vocabulaire mode que les cartes. À défaut, la légende elle-même.
