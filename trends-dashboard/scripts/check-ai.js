@@ -6,13 +6,18 @@
 
 const { PROVIDERS, describeSetup } = require('../lib/aiProvider');
 const groq = require('../lib/groq');
+const openrouter = require('../lib/openrouter');
 
 function mask(value) {
   if (!value) return '(vide)';
   return `${value.slice(0, 6)}…${value.slice(-4)} (${value.length} caractères)`;
 }
 
-const KEYS = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY' };
+const KEYS = {
+  gemini: 'GEMINI_API_KEY',
+  groq: 'GROQ_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+};
 
 (async () => {
   console.log('\nVérification des fournisseurs IA\n');
@@ -45,20 +50,41 @@ const KEYS = { gemini: 'GEMINI_API_KEY', groq: 'GROQ_API_KEY' };
       console.log(`          ✗ ${err.message}`);
     }
 
-    // Model names change; printing the catalogue removes the guesswork about
-    // which one can actually look at a photo.
+    // Which model can read a photo is the question that matters here, and it
+    // is answered by the catalogue rather than by a name written in advance.
     if (provider.id === 'groq') {
       try {
         const models = await groq.listModels();
         const vision = groq.pickVisionModel(models);
-        console.log(`          modèle de vision retenu : ${vision || 'aucun trouvé'}`);
-        console.log(`          catalogue : ${models.join(', ')}`);
+        console.log(
+          `          photos : ${vision ? `✓ via ${vision}` : '✗ aucun modèle multimodal sur ce compte'}`
+        );
+        if (!vision) console.log(`          catalogue : ${models.join(', ')}`);
+      } catch (err) {
+        console.log(`          catalogue indisponible : ${err.message}`);
+      }
+    }
+
+    if (provider.id === 'openrouter') {
+      try {
+        const models = await openrouter.listModels();
+        const capable = models.filter(openrouter.takesImages);
+        const chosen = openrouter.pickVisionModel(models);
+        console.log(`          photos : ${chosen ? `✓ via ${chosen}` : '✗ aucun modèle multimodal'}`);
+        console.log(`          ${capable.length} modèle(s) acceptent les images`);
       } catch (err) {
         console.log(`          catalogue indisponible : ${err.message}`);
       }
     }
     console.log('');
   }
+
+  const visionCapable = PROVIDERS.filter((p) => p.isConfigured() && p.vision !== false);
+  console.log(
+    visionCapable.length
+      ? `Identification des photos : ${visionCapable.map((p) => p.id).join(', ')}`
+      : "Identification des photos : aucun fournisseur ne peut lire une image.\nAjoute OPENROUTER_API_KEY (gratuit, openrouter.ai/keys)."
+  );
 
   console.log(
     anyWorks

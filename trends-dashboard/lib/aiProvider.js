@@ -5,6 +5,7 @@
 
 const gemini = require('./gemini');
 const groq = require('./groq');
+const openrouter = require('./openrouter');
 
 const PROVIDERS = [
   {
@@ -12,16 +13,34 @@ const PROVIDERS = [
     label: () => `Gemini (${gemini.modelName()})`,
     isConfigured: gemini.isConfigured,
     complete: gemini.complete,
+    // Kept for writing drafts, kept away from photographs: its free vision
+    // quota is exhausted within a day of normal use, so every identification
+    // began by burning a round trip on a provider that was going to refuse.
+    vision: false,
   },
   {
     id: 'groq',
     label: (withPhoto) => `Groq (${groq.modelName(withPhoto)})`,
     isConfigured: groq.isConfigured,
     complete: groq.complete,
+    // Whether a Groq account is offered any multimodal model at all depends on
+    // the account; when it is not, this falls through to OpenRouter.
+    vision: true,
+  },
+  {
+    id: 'openrouter',
+    label: () => `OpenRouter (${openrouter.modelName()})`,
+    isConfigured: openrouter.isConfigured,
+    complete: openrouter.complete,
+    vision: true,
   },
 ];
 
 const configured = () => PROVIDERS.filter((provider) => provider.isConfigured());
+
+// A photo narrows the field to providers that can actually look at one.
+const usable = (withPhoto) =>
+  configured().filter((provider) => (withPhoto ? provider.vision !== false : true));
 
 const isConfigured = () => configured().length > 0;
 
@@ -29,8 +48,14 @@ const isConfigured = () => configured().length > 0;
 // survivable when a Groq key is present. The last error is the one reported,
 // with every attempt named so the panel does not just say "it failed".
 async function complete(prompt, { photo = null } = {}) {
-  const available = configured();
-  if (!available.length) throw new Error('Aucun fournisseur IA configuré.');
+  const available = usable(Boolean(photo));
+  if (!available.length) {
+    throw new Error(
+      photo
+        ? 'Aucun fournisseur capable de lire une image. Ajoute OPENROUTER_API_KEY (clé gratuite sur openrouter.ai/keys).'
+        : 'Aucun fournisseur IA configuré.'
+    );
+  }
 
   const failures = [];
   for (const provider of available) {
@@ -48,10 +73,13 @@ async function complete(prompt, { photo = null } = {}) {
 function describeSetup() {
   return [
     'Aucune clé IA configurée. Au choix, dans .env :',
-    '  · GEMINI_API_KEY — gratuit sur https://aistudio.google.com/apikey',
-    '  · GROQ_API_KEY — gratuit sur https://console.groq.com/keys,',
-    '    sans projet Cloud ni facturation à configurer.',
+    '  · OPENROUTER_API_KEY — https://openrouter.ai/keys — le seul qui garantit',
+    '    un modèle capable de lire les photos, indispensable à l’identification.',
+    '  · GROQ_API_KEY — https://console.groq.com/keys — rapide, mais les modèles',
+    '    multimodaux ne sont pas proposés à tous les comptes.',
+    '  · GEMINI_API_KEY — https://aistudio.google.com/apikey — rédaction des',
+    '    brouillons uniquement ; son quota de vision gratuit s’épuise en un jour.',
   ].join('\n');
 }
 
-module.exports = { complete, isConfigured, configured, describeSetup, PROVIDERS };
+module.exports = { complete, isConfigured, configured, usable, describeSetup, PROVIDERS };

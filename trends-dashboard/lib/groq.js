@@ -147,9 +147,13 @@ async function complete(prompt, { photo = null } = {}) {
 
     const replacement = wantsVision ? pickVisionModel(catalogue) : catalogue[0];
     if (!replacement) {
+      // Which models a Groq account is offered is not something the user can
+      // change from here, so point at the provider that does have them rather
+      // than at a variable there is nothing valid to put in.
       throw new Error(
-        `Aucun modèle de vision chez Groq parmi : ${catalogue.slice(0, 12).join(', ')}. ` +
-          'Renseigne GROQ_VISION_MODEL avec un modèle multimodal de cette liste.'
+        "ce compte Groq ne propose aucun modèle capable de lire une image " +
+          `(${catalogue.length} modèles, tous texte, audio ou sécurité). ` +
+          'Ajoute OPENROUTER_API_KEY — clé gratuite sur openrouter.ai/keys.'
       );
     }
 

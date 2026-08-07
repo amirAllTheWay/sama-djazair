@@ -309,17 +309,39 @@ légende, sans analyse de l'image, et c'est indiqué dans le panneau. Les requê
 d'achat partent alors en anglais (`garmentTerms`) et non avec le libellé
 français affiché, puisque les marchands visés sont américains.
 
-### Les deux fournisseurs IA
+### Les fournisseurs IA
 
-`lib/aiProvider.js` essaie **Gemini** puis **Groq**, et bascule sur le second
-quand le premier échoue — même principe que Serper face à Custom Search, et
-pour la même raison : le quota gratuit de Gemini dépend du projet Cloud lié à
-la clé, et un projet sans allocation renvoie un `429` que rien ne débloque de
-l'extérieur.
+Deux usages, deux exigences. Rédiger un brouillon demande un modèle texte,
+n'importe lequel fait l'affaire. Identifier une pièce sur une photo demande un
+modèle capable de **voir** l'image — bien plus rare en gratuit, et c'est là que
+les choses se compliquent.
 
-- `GEMINI_API_KEY` — [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
-- `GROQ_API_KEY` — [console.groq.com/keys](https://console.groq.com/keys),
-  sans projet Cloud ni facturation
+`lib/aiProvider.js` essaie les fournisseurs dans l'ordre et bascule au suivant
+sur échec. Dès qu'une photo est jointe, la liste est réduite à ceux qui savent
+la lire.
+
+| | Photos | Texte |
+|---|---|---|
+| **OpenRouter** — [openrouter.ai/keys](https://openrouter.ai/keys) | ✓ | ✓ |
+| **Groq** — [console.groq.com/keys](https://console.groq.com/keys) | selon le compte | ✓ |
+| **Gemini** — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | écarté volontairement | ✓ |
+
+**Gemini est exclu de l'identification par photo.** Son quota de vision gratuit
+s'épuise en une journée d'usage normal, si bien que chaque identification
+commençait par perdre un aller-retour sur un fournisseur qui allait refuser. Il
+reste le premier choix pour rédiger.
+
+**Groq dépend du compte.** Les modèles multimodaux ne sont pas proposés à tous :
+un catalogue peut ne contenir que du texte, de l'audio et des classifieurs de
+sécurité, auquel cas les photos sont hors de portée quoi qu'on configure.
+
+**OpenRouter est le seul qui garantisse la vision.** Son catalogue déclare les
+modalités d'entrée et le prix de chaque modèle, donc un modèle multimodal
+gratuit y est choisi *en lisant l'API* plutôt qu'en devinant un nom — ce qui
+avait déjà cassé une fois, un identifiant écrit à l'avance ayant été retiré.
+
+`npm run check-ai` interroge chaque fournisseur configuré, dit lequel peut lire
+une photo, et affiche la réponse complète en cas d'échec.
 
 `npm run check-ai` interroge chaque fournisseur configuré et affiche la
 réponse complète. Sur un `429` Gemini, le message distingue les trois cas, que
