@@ -343,6 +343,25 @@ avait déjà cassé une fois, un identifiant écrit à l'avance ayant été reti
 `npm run check-ai` interroge chaque fournisseur configuré, dit lequel peut lire
 une photo, et affiche la réponse complète en cas d'échec.
 
+### Obtenir du JSON d'un petit modèle
+
+Les modèles gratuits répondent en prose à peu près aussi souvent qu'ils suivent
+une consigne de format. Trois garde-fous, du plus fiable au dernier recours :
+
+1. **La contrainte passe par l'API**, pas seulement par le prompt —
+   `response_format: json_object` chez OpenRouter et Groq, `responseMimeType`
+   chez Gemini.
+2. **Un second essai** avec un rappel ferme, si la première réponse n'est pas
+   exploitable.
+3. **Le repli sur la légende**, sans IA, si les deux échouent.
+
+Et surtout, l'erreur **cite ce que le modèle a répondu**. Un « Réponse sans
+objet JSON » ne laissait rien pour agir ; on distingue maintenant une réponse
+en prose, un JSON malformé et un refus pur et simple — ce dernier étant
+fréquent quand un modèle de vision voit une personne identifiable. Le prompt
+précise d'ailleurs que la tâche porte sur les vêtements et non sur l'identité
+de la personne, ce qui réduit ces refus.
+
 `npm run check-ai` interroge chaque fournisseur configuré et affiche la
 réponse complète. Sur un `429` Gemini, le message distingue les trois cas, que
 Google formule presque identiquement :

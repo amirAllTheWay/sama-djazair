@@ -87,7 +87,7 @@ async function visionModel(apiKey) {
   return chosen;
 }
 
-async function complete(prompt, { photo = null } = {}) {
+async function complete(prompt, { photo = null, json = false } = {}) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("OPENROUTER_API_KEY n'est pas renseigné.");
 
@@ -99,11 +99,16 @@ async function complete(prompt, { photo = null } = {}) {
       ]
     : prompt;
 
+  const payload = { model, messages: [{ role: 'user', content }] };
+  // Asking in the prompt is not enough for small free models; the API-level
+  // constraint is what actually keeps prose out of the answer.
+  if (json) payload.response_format = { type: 'json_object' };
+
   const { statusCode, body } = await request({
     path: '/api/v1/chat/completions',
     method: 'POST',
     apiKey,
-    payload: { model, messages: [{ role: 'user', content }] },
+    payload,
   });
 
   let parsed = null;

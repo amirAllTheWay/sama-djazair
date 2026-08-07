@@ -47,7 +47,7 @@ const isConfigured = () => configured().length > 0;
 // Falls through to the next provider on failure, so a Gemini quota wall is
 // survivable when a Groq key is present. The last error is the one reported,
 // with every attempt named so the panel does not just say "it failed".
-async function complete(prompt, { photo = null } = {}) {
+async function complete(prompt, { photo = null, json = false } = {}) {
   const available = usable(Boolean(photo));
   if (!available.length) {
     throw new Error(
@@ -60,7 +60,7 @@ async function complete(prompt, { photo = null } = {}) {
   const failures = [];
   for (const provider of available) {
     try {
-      const text = await provider.complete(prompt, { photo });
+      const text = await provider.complete(prompt, { photo, json });
       return { text, provider: provider.label(Boolean(photo)) };
     } catch (err) {
       failures.push(`${provider.id} — ${err.message || String(err)}`);

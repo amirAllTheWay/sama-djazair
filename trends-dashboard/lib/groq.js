@@ -72,7 +72,7 @@ function pickVisionModel(models) {
   return null;
 }
 
-function post(prompt, apiKey, model, photo) {
+function post(prompt, apiKey, model, photo, json) {
   // Groq follows the OpenAI shape: the content becomes a list of parts as soon
   // as an image is attached.
   const content = photo
@@ -82,11 +82,10 @@ function post(prompt, apiKey, model, photo) {
       ]
     : prompt;
 
-  const payload = JSON.stringify({
-    model,
-    messages: [{ role: 'user', content }],
-    temperature: 0.7,
-  });
+  const body = { model, messages: [{ role: 'user', content }], temperature: 0.7 };
+  // Asking in the prompt is not enough for smaller models.
+  if (json) body.response_format = { type: 'json_object' };
+  const payload = JSON.stringify(body);
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -114,8 +113,8 @@ function post(prompt, apiKey, model, photo) {
   });
 }
 
-async function attempt(prompt, apiKey, model, photo) {
-  const { statusCode, body } = await post(prompt, apiKey, model, photo);
+async function attempt(prompt, apiKey, model, photo, json) {
+  const { statusCode, body } = await post(prompt, apiKey, model, photo, json);
 
   let parsed = null;
   try {
@@ -127,13 +126,13 @@ async function attempt(prompt, apiKey, model, photo) {
   return { statusCode, body, parsed };
 }
 
-async function complete(prompt, { photo = null } = {}) {
+async function complete(prompt, { photo = null, json = false } = {}) {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("GROQ_API_KEY n'est pas renseigné.");
 
   const wantsVision = Boolean(photo);
   let model = modelName(wantsVision);
-  let { statusCode, body, parsed } = await attempt(prompt, apiKey, model, photo);
+  let { statusCode, body, parsed } = await attempt(prompt, apiKey, model, photo, json);
 
   // A retired or renamed model is the one failure worth recovering from
   // without the user editing .env: ask Groq what it actually serves today.
@@ -159,7 +158,7 @@ async function complete(prompt, { photo = null } = {}) {
 
     if (wantsVision) resolvedVisionModel = replacement;
     model = replacement;
-    ({ statusCode, body, parsed } = await attempt(prompt, apiKey, model, photo));
+    ({ statusCode, body, parsed } = await attempt(prompt, apiKey, model, photo, json));
   }
 
   if (statusCode === 401) throw new Error('Clé Groq refusée — vérifie GROQ_API_KEY sur console.groq.com.');

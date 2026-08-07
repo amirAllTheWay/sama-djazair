@@ -20,7 +20,12 @@ Décris d'abord ce que tu vois réellement, puis identifie LA PIÈCE LA PLUS MAR
     : `AUCUNE IMAGE n'a pu être chargée : appuie-toi uniquement sur la légende ci-dessous.
 Si la légende ne décrit pas de vêtement précis, réponds avec "confidence": "faible".`;
 
-  return `Tu es un rédacteur mode chargé d'identifier une pièce portée par une célébrité sur une photo précise.
+  return `Tu es un rédacteur mode qui décrit des VÊTEMENTS sur une photo de presse.
+
+Il ne s'agit pas de reconnaître ni de nommer la personne — son identité est déjà
+connue et n'a aucun intérêt ici. La tâche porte uniquement sur les habits :
+coupes, matières, couleurs. C'est une description de mode, comme en publie
+n'importe quel magazine.
 
 ${visual}
 
@@ -77,17 +82,32 @@ RÈGLES IMPÉRATIVES
   jamais la célébrité.`;
 }
 
-// The model is asked for bare JSON, but wrapping it in a code fence is the
-// most common way it disobeys.
+// Small free models answer in prose about as often as they obey a format
+// instruction, and a vision model shown a photograph of a person sometimes
+// declines outright. Both come back here, so the error carries what was
+// actually said — hiding it left nothing to act on.
 function parseJson(text) {
-  const cleaned = text
+  const cleaned = String(text || '')
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '');
+
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('Réponse sans objet JSON.');
-  return JSON.parse(cleaned.slice(start, end + 1));
+
+  if (start === -1 || end === -1 || end < start) {
+    const said = cleaned.slice(0, 200) || '(réponse vide)';
+    if (/(cannot|can't|unable|sorry|not able|I'm not|désolé|je ne peux)/i.test(cleaned)) {
+      throw new Error(`le modèle a refusé d'analyser la photo : « ${said} »`);
+    }
+    throw new Error(`le modèle n'a pas répondu en JSON : « ${said} »`);
+  }
+
+  try {
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch (err) {
+    throw new Error(`JSON illisible (${err.message}) : « ${cleaned.slice(start, start + 200)} »`);
+  }
 }
 
 // Without a key, the caption has usually already yielded a brand and a
@@ -140,15 +160,28 @@ async function identifyPiece({ article, look }) {
       photoNote = `Photo non analysée (${err.message}) — identification d'après le texte seul.`;
     }
 
-    try {
-      const prompt = buildPrompt({ article, look, hasPhoto: Boolean(photo) });
-      const { text, provider } = await aiProvider.complete(prompt, { photo });
-      identification = parseJson(text);
-      identifiedBy = photo ? `${provider}, d'après la photo` : `${provider}, texte seul`;
-      if (photoNote) warning = photoNote;
-    } catch (err) {
-      identification = withoutAi({ article, look });
-      warning = `Identification IA échouée — ${err.message}`;
+    const prompt = buildPrompt({ article, look, hasPhoto: Boolean(photo) });
+
+    // Small free models answer in prose often enough that one firm reminder is
+    // worth a second call before falling back to the caption.
+    const attempts = [
+      prompt,
+      `${prompt}\n\nRAPPEL : ta réponse doit commencer par { et finir par }. Aucun texte avant ou après, aucune balise de code.`,
+    ];
+
+    for (const [index, attemptPrompt] of attempts.entries()) {
+      try {
+        const { text, provider } = await aiProvider.complete(attemptPrompt, { photo, json: true });
+        identification = parseJson(text);
+        identifiedBy = photo ? `${provider}, d'après la photo` : `${provider}, texte seul`;
+        if (photoNote) warning = photoNote;
+        break;
+      } catch (err) {
+        if (index === attempts.length - 1) {
+          identification = withoutAi({ article, look });
+          warning = `Identification IA échouée — ${err.message}`;
+        }
+      }
     }
   }
 

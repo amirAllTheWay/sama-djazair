@@ -11,11 +11,13 @@ const MAX_RETRIES = 2;
 const isConfigured = () => Boolean(process.env.GEMINI_API_KEY);
 const modelName = () => process.env.GEMINI_MODEL || DEFAULT_MODEL;
 
-function post(prompt, apiKey, model, photo) {
+function post(prompt, apiKey, model, photo, json) {
   // Gemini takes the image inline, alongside the text, in the same part list.
   const parts = [{ text: prompt }];
   if (photo) parts.push({ inline_data: { mime_type: photo.mimeType, data: photo.base64 } });
-  const payload = JSON.stringify({ contents: [{ parts }] });
+  const request = { contents: [{ parts }] };
+  if (json) request.generationConfig = { responseMimeType: 'application/json' };
+  const payload = JSON.stringify(request);
 
   return new Promise((resolve, reject) => {
     const req = https.request(
@@ -87,13 +89,13 @@ function describeQuotaError(error, model) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function complete(prompt, { photo = null } = {}) {
+async function complete(prompt, { photo = null, json = false } = {}) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY n'est pas renseigné.");
   const model = modelName();
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
-    const { statusCode, body } = await post(prompt, apiKey, model, photo);
+    const { statusCode, body } = await post(prompt, apiKey, model, photo, json);
 
     let parsed = null;
     try {
