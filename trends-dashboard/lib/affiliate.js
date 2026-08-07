@@ -97,6 +97,27 @@ function plainSearchUrl(query) {
   return `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`;
 }
 
+// A real product page, wrapped for tracking. Both platforms already took a
+// merchant URL; what they were being handed was a Google Shopping query, which
+// is why nothing was ever properly monetisable.
+async function linkForProduct(product) {
+  for (const provider of configuredProviders()) {
+    try {
+      const link =
+        provider === 'shopmy'
+          ? await shopmyLink(product.title, product.url)
+          : await impactLink(product.url);
+      if (link) return { ...product, url: link.url, provider: link.provider, affiliate: true };
+    } catch {
+      // Try the other platform rather than losing the product over it.
+    }
+  }
+
+  // Unaffiliated still beats absent: the reader reaches the right page, and
+  // the card says the link earns nothing.
+  return { ...product, affiliate: false, provider: configuredProviders().length ? 'échec' : null };
+}
+
 async function linkForQuery(query) {
   const merchantUrl = plainSearchUrl(query);
   const attempts = [];
@@ -138,4 +159,10 @@ async function affiliateLinksFor(article) {
   return links;
 }
 
-module.exports = { affiliateLinksFor, linkForQuery, shoppingQueries, configuredProviders };
+module.exports = {
+  affiliateLinksFor,
+  linkForQuery,
+  linkForProduct,
+  shoppingQueries,
+  configuredProviders,
+};

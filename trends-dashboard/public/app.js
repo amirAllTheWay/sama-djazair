@@ -313,6 +313,55 @@ function lookStrip(article, slug) {
 }
 
 
+// One purchasable product: its photo, name, price and merchant. The whole
+// card is the link, so the price is part of the decision rather than
+// something to go and find.
+function productCard(product) {
+  const card = document.createElement('a');
+  card.className = 'product-card';
+  card.href = product.url;
+  card.target = '_blank';
+  card.rel = 'noopener';
+
+  if (product.image) {
+    const thumb = document.createElement('img');
+    thumb.className = 'product-thumb';
+    thumb.src = product.image;
+    thumb.alt = '';
+    thumb.loading = 'lazy';
+    thumb.addEventListener('error', () => thumb.remove());
+    card.appendChild(thumb);
+  }
+
+  const body = document.createElement('div');
+  body.className = 'product-body';
+
+  const title = document.createElement('p');
+  title.className = 'product-title';
+  title.textContent = product.title;
+  body.appendChild(title);
+
+  const meta = document.createElement('p');
+  meta.className = 'product-meta';
+  const price = document.createElement('strong');
+  price.textContent = product.price || 'prix non indiqué';
+  meta.appendChild(price);
+  if (product.merchant) meta.append(` · ${product.merchant}`);
+  body.appendChild(meta);
+
+  // On its own line: at 130 px wide, appending it to the price truncated both.
+  if (!product.affiliate) {
+    const note = document.createElement('p');
+    note.className = 'shop-note';
+    note.textContent = 'lien non affilié';
+    body.appendChild(note);
+  }
+
+  card.appendChild(body);
+  return card;
+}
+
+// A shelf of real products for one query, or the reason there is none.
 function shopRow(heading, entry) {
   const row = document.createElement('div');
   row.className = 'shop-row';
@@ -322,25 +371,27 @@ function shopRow(heading, entry) {
   label.textContent = heading;
   row.appendChild(label);
 
-  const text = document.createElement('p');
-  text.className = 'shop-text';
-  text.textContent = entry.description || entry.query || '—';
-  row.appendChild(text);
-
-  const link = document.createElement('a');
-  link.className = 'shop-link';
-  link.href = entry.url;
-  link.target = '_blank';
-  link.rel = 'noopener';
-  link.textContent = entry.affiliate ? `Acheter (${entry.provider})` : 'Voir les offres';
-  row.appendChild(link);
-
-  if (!entry.affiliate) {
-    const note = document.createElement('span');
-    note.className = 'shop-note';
-    note.textContent = 'lien non affilié';
-    row.appendChild(note);
+  if (entry.description) {
+    const text = document.createElement('p');
+    text.className = 'shop-text';
+    text.textContent = entry.description;
+    row.appendChild(text);
   }
+
+  if (!entry.products?.length) {
+    const empty = document.createElement('p');
+    empty.className = 'shop-empty';
+    empty.textContent = entry.error
+      ? `Aucun produit — ${entry.error}`
+      : 'Aucun produit trouvé pour cette pièce.';
+    row.appendChild(empty);
+    return row;
+  }
+
+  const shelf = document.createElement('div');
+  shelf.className = 'product-shelf';
+  entry.products.forEach((product) => shelf.appendChild(productCard(product)));
+  row.appendChild(shelf);
 
   return row;
 }

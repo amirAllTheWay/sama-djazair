@@ -5,13 +5,34 @@
 // the image, which it never sees.
 
 const aiProvider = require('./aiProvider');
-const { linkForQuery, configuredProviders } = require('./affiliate');
+const { linkForProduct, configuredProviders } = require('./affiliate');
+const { searchProducts, isConfigured: shoppingConfigured } = require('./shopping');
 const { garmentTerms } = require('./fashionVocabulary');
 const { loadPhoto } = require('./photoInput');
 
-// A full outfit rarely has more than this, and each entry costs two affiliate
-// lookups.
+// A full outfit rarely has more than this, and each entry costs two shopping
+// searches.
 const MAX_PIECES = 6;
+
+// Enough to choose from without turning the panel into a catalogue.
+const PRODUCTS_PER_PIECE = 3;
+
+// Real products for one query, each wrapped for affiliation. A failed search
+// is reported rather than swallowed — an empty shelf with no reason given is
+// the kind of silence that has cost time repeatedly here.
+async function productsFor(query) {
+  if (!searchProducts || !shoppingConfigured()) {
+    return { query, products: [], error: 'SERPER_API_KEY absente — pas de recherche produits.' };
+  }
+
+  try {
+    const found = await searchProducts(query, { limit: PRODUCTS_PER_PIECE });
+    const products = await Promise.all(found.map(linkForProduct));
+    return { query, products, error: products.length ? null : 'aucun produit trouvé' };
+  } catch (err) {
+    return { query, products: [], error: err.message || String(err) };
+  }
+}
 
 function buildPrompt({ article, look, hasPhoto }) {
   const visual = hasPhoto
@@ -185,15 +206,13 @@ async function identifyPiece({ article, look }) {
     }
   }
 
-  // Each garment gets both a link to the real thing and one to an affordable
-  // stand-in, so every line of the list is directly shoppable.
   const listed = (identification.pieces || []).filter((entry) => entry?.piece).slice(0, MAX_PIECES);
 
   const pieces = await Promise.all(
     listed.map(async (entry) => {
       const [original, alternative] = await Promise.all([
-        linkForQuery(entry.searchQuery || entry.piece),
-        linkForQuery(entry.alternative?.searchQuery || `affordable ${entry.piece}`),
+        productsFor(entry.searchQuery || entry.piece),
+        productsFor(entry.alternative?.searchQuery || `affordable ${entry.piece}`),
       ]);
       return {
         piece: entry.piece,
