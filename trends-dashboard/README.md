@@ -260,9 +260,16 @@ chercher les octets exactement comme le fait déjà l'identification. L'accès
 est restreint aux URL présentes dans la dernière collecte, pour que ce ne soit
 pas un proxy ouvert vers n'importe quel hôte.
 
-Un clic sur une vignette **agrandit la photo** dans une popin, avec sa légende.
-Il n'ouvre pas l'article : c'est le rôle du titre et de la photo de couverture.
-Échap ou un clic à côté referme.
+Un clic sur une vignette **agrandit la photo** dans une popin, avec sa légende
+et un bouton **Retrouver la pièce**. Il n'ouvre pas l'article : c'est le rôle
+du titre et de la photo de couverture. Échap, la croix ou un clic à côté
+referment.
+
+Les pièces identifiées s'affichent **dans cette même popin, sous la photo**.
+Elles occupaient auparavant un second panneau qui remplaçait le premier, donc
+la photo disparaissait au moment précis où il fallait confronter la réponse à
+l'image. Le bouton sous la vignette mène au même endroit, l'analyse déjà
+lancée.
 
 Cette lecture n'est faite que pour les cinq articles affichés — cinq requêtes
 par collecte, pas une par candidat.

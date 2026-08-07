@@ -131,9 +131,11 @@ function proxied(url) {
   return `/api/image?url=${encodeURIComponent(url)}`;
 }
 
-// The photo on its own, big. Clicking a look should show the look, not send
-// the reader off to the article.
-function openPhotoPanel(look) {
+// One panel for a look: the photo full size, and underneath it the button that
+// sends that photo to the model plus whatever it answers. Identification used
+// to live in a second panel that replaced this one, which meant losing sight
+// of the photo exactly when the answer needed checking against it.
+function openPhotoPanel(look, article, slug, { identifyNow = false } = {}) {
   document.getElementById('draft-panel')?.remove();
 
   const panel = document.createElement('div');
@@ -164,6 +166,45 @@ function openPhotoPanel(look) {
     inner.appendChild(caption);
   }
 
+  const action = document.createElement('button');
+  action.type = 'button';
+  action.className = 'refresh-btn photo-identify';
+  action.textContent = 'Retrouver la pièce';
+  inner.appendChild(action);
+
+  const results = document.createElement('div');
+  results.className = 'photo-results';
+  inner.appendChild(results);
+
+  async function identify() {
+    action.disabled = true;
+    action.textContent = 'Analyse de la photo…';
+    results.replaceChildren();
+
+    try {
+      const res = await fetch('/api/identify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, url: article.url, image: look.image }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.message || "Échec de l'identification.");
+      renderIdentification(results, body);
+      action.textContent = 'Relancer l’analyse';
+    } catch (err) {
+      const box = document.createElement('p');
+      box.className = 'error-box';
+      box.textContent = err.message;
+      results.appendChild(box);
+      action.textContent = 'Réessayer';
+    } finally {
+      action.disabled = false;
+    }
+  }
+
+  action.addEventListener('click', identify);
+  if (identifyNow) identify();
+
   panel.appendChild(inner);
   panel.addEventListener('click', (event) => {
     if (event.target === panel) panel.remove();
@@ -174,6 +215,39 @@ function openPhotoPanel(look) {
     document.removeEventListener('keydown', onEscape);
   });
   document.body.appendChild(panel);
+}
+
+// What the model answered, rendered into the photo panel.
+function renderIdentification(container, payload) {
+  const meta = document.createElement('p');
+  meta.className = 'draft-meta';
+  const count = payload.pieces?.length || 0;
+  meta.textContent = `Identifié par ${payload.identifiedBy} · ${count} pièce${count > 1 ? 's' : ''}`;
+  container.appendChild(meta);
+
+  if (payload.visible) {
+    const seen = document.createElement('p');
+    seen.className = 'piece-visible';
+    seen.textContent = `Sur la photo : ${payload.visible}`;
+    container.appendChild(seen);
+  }
+
+  if (payload.warning) {
+    const warn = document.createElement('p');
+    warn.className = 'error-box';
+    warn.textContent = payload.warning;
+    container.appendChild(warn);
+  }
+
+  if (!count) {
+    const none = document.createElement('p');
+    none.className = 'block-empty';
+    none.textContent = 'Aucune pièce identifiée sur cette photo.';
+    container.appendChild(none);
+    return;
+  }
+
+  payload.pieces.forEach((piece) => container.appendChild(pieceBlock(piece)));
 }
 
 // The photos found inside the article, laid out as a horizontal strip. Each
@@ -213,7 +287,7 @@ function lookStrip(article, slug) {
       frame.textContent = 'photo indisponible';
       frame.disabled = true;
     });
-    frame.addEventListener('click', () => openPhotoPanel(look));
+    frame.addEventListener('click', () => openPhotoPanel(look, article, slug));
     frame.appendChild(img);
     item.appendChild(frame);
 
@@ -223,11 +297,13 @@ function lookStrip(article, slug) {
     if (look.caption) label.title = look.caption;
     item.appendChild(label);
 
+    // Same panel as clicking the photo, with the analysis already under way —
+    // the answer has to be read next to the image it describes.
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'identify-btn';
     btn.textContent = 'Retrouver la pièce';
-    btn.addEventListener('click', () => requestIdentify(slug, article, look, btn));
+    btn.addEventListener('click', () => openPhotoPanel(look, article, slug, { identifyNow: true }));
     item.appendChild(btn);
 
     strip.appendChild(item);
@@ -236,26 +312,6 @@ function lookStrip(article, slug) {
   return strip;
 }
 
-async function requestIdentify(slug, article, look, button) {
-  button.disabled = true;
-  button.textContent = 'Recherche…';
-
-  try {
-    const res = await fetch('/api/identify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slug, url: article.url, image: look.image }),
-    });
-    const body = await res.json();
-    if (!res.ok) throw new Error(body.message || "Échec de l'identification.");
-    openLookPanel(body, look);
-  } catch (err) {
-    openLookPanel({ error: err.message }, look);
-  } finally {
-    button.disabled = false;
-    button.textContent = 'Retrouver la pièce';
-  }
-}
 
 function shopRow(heading, entry) {
   const row = document.createElement('div');
@@ -321,83 +377,6 @@ function pieceBlock(piece) {
   return block;
 }
 
-function openLookPanel(payload, look) {
-  document.getElementById('draft-panel')?.remove();
-
-  const panel = document.createElement('div');
-  panel.id = 'draft-panel';
-  panel.className = 'draft-panel';
-
-  const inner = document.createElement('div');
-  inner.className = 'draft-inner';
-
-  const head = document.createElement('div');
-  head.className = 'draft-head';
-  const heading = document.createElement('p');
-  heading.className = 'draft-title';
-  heading.textContent = payload.error ? 'Identification impossible' : 'Les pièces sur la photo';
-  head.appendChild(heading);
-
-  const close = document.createElement('button');
-  close.type = 'button';
-  close.className = 'draft-close';
-  close.setAttribute('aria-label', 'Fermer');
-  close.textContent = '×';
-  close.addEventListener('click', () => panel.remove());
-  head.appendChild(close);
-  inner.appendChild(head);
-
-  if (payload.error) {
-    const err = document.createElement('p');
-    err.className = 'error-box';
-    err.textContent = payload.error;
-    inner.appendChild(err);
-  } else {
-    const preview = document.createElement('img');
-    preview.className = 'look-preview';
-    preview.src = proxied(look.image);
-    preview.alt = '';
-    inner.appendChild(preview);
-
-    const meta = document.createElement('p');
-    meta.className = 'draft-meta';
-    // Confidence is stated per garment now, not once for the whole photo.
-    const count = payload.pieces?.length || 0;
-    meta.textContent = `Identifié par ${payload.identifiedBy} · ${count} pièce${count > 1 ? 's' : ''}`;
-    inner.appendChild(meta);
-
-    // What the model reports seeing, next to the photo: the quickest way to
-    // catch an answer that describes something other than this image.
-    if (payload.visible) {
-      const seen = document.createElement('p');
-      seen.className = 'piece-visible';
-      seen.textContent = `Sur la photo : ${payload.visible}`;
-      inner.appendChild(seen);
-    }
-
-    if (payload.warning) {
-      const warn = document.createElement('p');
-      warn.className = 'error-box';
-      warn.textContent = payload.warning;
-      inner.appendChild(warn);
-    }
-
-    if (!payload.pieces?.length) {
-      const none = document.createElement('p');
-      none.className = 'block-empty';
-      none.textContent = 'Aucune pièce identifiée sur cette photo.';
-      inner.appendChild(none);
-    }
-
-    payload.pieces?.forEach((piece) => inner.appendChild(pieceBlock(piece)));
-  }
-
-  panel.appendChild(inner);
-  panel.addEventListener('click', (event) => {
-    if (event.target === panel) panel.remove();
-  });
-  document.body.appendChild(panel);
-}
 
 function articleEntry(article, slug) {
   const wrap = document.createElement('div');
